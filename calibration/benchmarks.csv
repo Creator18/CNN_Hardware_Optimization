@@ -1,0 +1,5 @@
+source,url,model,device,device_class,precision,framework,input_size,latency_ms,throughput_fps,gmac_per_s,is_estimate,notes
+kentaroy47_trt,https://github.com/kentaroy47/benchmark-FP32-FP16-INT8-with-TensorRT,ResNet-18,jetson_nano,GPU,FP32,TensorRT,256x256,26.0,,,0,seed row from trial2 published_benchmarks
+deepedgebench_2021,https://arxiv.org/abs/2108.09457,MobileNetV2,jetson_nano,GPU,FP32,TensorRT,224x224,10.0,,,1,EXTRAPOLATED: raw TF ~181ms x assumed 12-18x TRT speedup; replace with a measured point
+spagnolo_2026,https://www.mdpi.com/journal/sensors,ResNet-18,zynq_7020,FPGA,INT8,custom VHDL streaming,224x224,202.0,4.94,4.45,0,seed row; ship-recognition accelerator
+mdpi_electronics_2025,https://www.mdpi.com/journal/electronics,MobileNetV2,zynq_7020,FPGA,INT16,HLS 16-bit fixed,224x224,43.0,,,0,seed row; low-power HLS accelerator

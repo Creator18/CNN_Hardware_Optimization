@@ -1,0 +1,35 @@
+# ============================================================
+# Vitis HLS / Vivado build artifacts — NEVER commit these
+# (they are gigabytes of regenerable binary/intermediate junk)
+# ============================================================
+hls/projects/          # Vitis HLS project working dirs
+*.jou
+*.log
+vivado*.jou
+vivado*.log
+vitis_hls.log
+.Xil/
+*/xsim.dir/
+*/.autopilot/
+*/sol*/impl/
+*/sol*/.autopilot/
+*/sol*/syn/verilog/
+*/sol*/syn/vhdl/
+
+# Keep ONLY: kernel source, the synthesis .tcl, and extracted report JSON/CSV.
+# The extracted reports live in hls/reports/ and ARE committed.
+!hls/reports/
+!hls/reports/*.json
+
+# ------------------------------------------------------------
+# Python
+# ------------------------------------------------------------
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+
+# ------------------------------------------------------------
+# Scratch
+# ------------------------------------------------------------
+_paper.txt
