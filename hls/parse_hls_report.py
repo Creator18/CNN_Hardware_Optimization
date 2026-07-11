@@ -6,11 +6,11 @@ C-synthesis reports and write one committed JSON per kernel into hls/reports/.
 These JSONs are the ground truth that replaces the hand-set FPGA efficiency
 constants in trial2.ipynb (see hls/fpga_constants_from_hls() consumer).
 
-Run AFTER `vitis_hls -f run_synth.tcl`:
+Run AFTER the v++ synthesis runs (see run_synth.sh / README):
     python parse_hls_report.py
 
-It looks for projects/<kernel>/sol1/syn/report/<top>_csynth.xml (the machine-
-readable report). Falls back to scanning for any *_csynth.xml under projects/.
+It looks for work/<kernel>/hls/syn/report/<top>_csynth.xml (the top-level
+machine-readable report produced by `v++ -c --mode hls`).
 """
 import glob
 import json
@@ -18,11 +18,11 @@ import os
 import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PROJ_DIR = os.path.join(HERE, "projects")
+WORK_DIR = os.path.join(HERE, "work")
 OUT_DIR = os.path.join(HERE, "reports")
 
 # Zynq-7020 (xc7z020) total resources, for utilization fractions.
-XC7Z020 = {"DSP48E": 220, "BRAM_18K": 280, "FF": 106400, "LUT": 53200}
+XC7Z020 = {"DSP": 220, "BRAM_18K": 280, "FF": 106400, "LUT": 53200}
 
 
 def _txt(node, path, cast=float, default=None):
@@ -50,7 +50,7 @@ def parse_csynth_xml(xml_path: str) -> dict:
     def res(tag):
         return _txt(area, tag, int, 0) if area is not None else 0
 
-    dsp, bram, ff, lut = res("DSP48E"), res("BRAM_18K"), res("FF"), res("LUT")
+    dsp, bram, ff, lut = res("DSP"), res("BRAM_18K"), res("FF"), res("LUT")
     cycles = worst if worst is not None else best
 
     return {
@@ -59,12 +59,12 @@ def parse_csynth_xml(xml_path: str) -> dict:
         "latency_cycles_worst": worst,
         "latency_us_worst": (cycles * clk / 1000.0) if (cycles and clk) else None,
         "initiation_interval": ii,
-        "dsp48e": dsp,
+        "dsp": dsp,
         "bram_18k": bram,
         "ff": ff,
         "lut": lut,
         "util": {
-            "dsp": round(dsp / XC7Z020["DSP48E"], 4),
+            "dsp": round(dsp / XC7Z020["DSP"], 4),
             "bram": round(bram / XC7Z020["BRAM_18K"], 4),
             "ff": round(ff / XC7Z020["FF"], 4),
             "lut": round(lut / XC7Z020["LUT"], 4),
@@ -75,14 +75,15 @@ def parse_csynth_xml(xml_path: str) -> dict:
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
-    reports = glob.glob(os.path.join(PROJ_DIR, "*", "sol1", "syn", "report", "*_csynth.xml"))
+    # top-level report is <top>_csynth.xml (top functions are named *_top)
+    reports = glob.glob(os.path.join(WORK_DIR, "*", "hls", "syn", "report", "*_top_csynth.xml"))
     if not reports:
-        print(f"No *_csynth.xml found under {PROJ_DIR}.")
-        print("Run `vitis_hls -f run_synth.tcl` first.")
+        print(f"No *_top_csynth.xml found under {WORK_DIR}.")
+        print("Run the v++ synthesis first (see run_synth.sh / README).")
         return
 
     for xml_path in reports:
-        kernel = os.path.relpath(xml_path, PROJ_DIR).split(os.sep)[0]
+        kernel = os.path.relpath(xml_path, WORK_DIR).split(os.sep)[0]
         data = parse_csynth_xml(xml_path)
         data["kernel"] = kernel
         data["part"] = "xc7z020-clg400-1"
@@ -90,7 +91,7 @@ def main():
         with open(out, "w") as f:
             json.dump(data, f, indent=2)
         print(f"  {kernel:14s} II={data['initiation_interval']}  "
-              f"lat={data['latency_us_worst']} us  DSP={data['dsp48e']} "
+              f"lat={data['latency_us_worst']} us  DSP={data['dsp']} "
               f"({data['util']['dsp']*100:.0f}%) -> {os.path.relpath(out, HERE)}")
 
 

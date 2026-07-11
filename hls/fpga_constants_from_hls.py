@@ -54,7 +54,7 @@ def derive_constants() -> dict:
             continue
         r = json.load(open(path))
         cycles = r.get("latency_cycles_worst") or r.get("latency_cycles_best")
-        dsp = r.get("dsp48e") or 0
+        dsp = r.get("dsp") or 0
         if not cycles:
             print(f"  [skip] {kernel}: no latency in report")
             continue
@@ -63,7 +63,7 @@ def derive_constants() -> dict:
         lt = KERNEL_TO_LAYERTYPE[kernel]
         out[lt] = {
             "macs_per_cycle": round(macs_per_cycle, 4),
-            "dsp48e": dsp,
+            "dsp": dsp,
             "efficiency_per_dsp": round(eff, 4),
             "latency_us": r.get("latency_us_worst"),
             "initiation_interval": r.get("initiation_interval"),

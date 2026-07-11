@@ -1,1 +1,30 @@
-{}
+{
+  "CONV": {
+    "macs_per_cycle": 0.0762,
+    "dsp": 575,
+    "efficiency_per_dsp": 0.0001,
+    "latency_us": 11077917.564199999,
+    "initiation_interval": 270950411
+  },
+  "DEPTHWISE_CONV": {
+    "macs_per_cycle": 1.0,
+    "dsp": 9,
+    "efficiency_per_dsp": 0.1111,
+    "latency_us": 19779.5763,
+    "initiation_interval": 2709532
+  },
+  "POINTWISE_CONV": {
+    "macs_per_cycle": 0.9994,
+    "dsp": 16,
+    "efficiency_per_dsp": 0.0625,
+    "latency_us": 79163.87909999999,
+    "initiation_interval": 10844368
+  },
+  "BATCHNORM": {
+    "macs_per_cycle": 0.9939,
+    "dsp": 1,
+    "efficiency_per_dsp": 0.9939,
+    "latency_us": 1474.1255,
+    "initiation_interval": 201936
+  }
+}

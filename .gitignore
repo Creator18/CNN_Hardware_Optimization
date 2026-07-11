@@ -2,22 +2,21 @@
 # Vitis HLS / Vivado build artifacts — NEVER commit these
 # (they are gigabytes of regenerable binary/intermediate junk)
 # ============================================================
-hls/projects/          # Vitis HLS project working dirs
+hls/work/              # v++ --work_dir output (synthesis build dirs)
+hls/projects/          # leftover from earlier classic-Tcl attempts
+hls/*.log
 *.jou
-*.log
 vivado*.jou
-vivado*.log
 vitis_hls.log
 .Xil/
-*/xsim.dir/
-*/.autopilot/
-*/sol*/impl/
-*/sol*/.autopilot/
-*/sol*/syn/verilog/
-*/sol*/syn/vhdl/
+.hls.failed
+hls.app
 
-# Keep ONLY: kernel source, the synthesis .tcl, and extracted report JSON/CSV.
-# The extracted reports live in hls/reports/ and ARE committed.
+# Licenses — node-locked, machine-specific, keep out of the repo
+*.lic
+
+# Keep ONLY: kernel source, the .cfg files, the runner, and extracted report
+# JSON. The extracted reports live in hls/reports/ and ARE committed.
 !hls/reports/
 !hls/reports/*.json
 

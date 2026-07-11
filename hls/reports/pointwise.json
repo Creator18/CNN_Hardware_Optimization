@@ -1,0 +1,20 @@
+{
+  "clock_period_ns": 7.3,
+  "latency_cycles_best": 10844367,
+  "latency_cycles_worst": 10844367,
+  "latency_us_worst": 79163.87909999999,
+  "initiation_interval": 10844368,
+  "dsp": 16,
+  "bram_18k": 4,
+  "ff": 5208,
+  "lut": 6044,
+  "util": {
+    "dsp": 0.0727,
+    "bram": 0.0143,
+    "ff": 0.0489,
+    "lut": 0.1136
+  },
+  "source_report": "work\\pointwise\\hls\\syn\\report\\pointwise_top_csynth.xml",
+  "kernel": "pointwise",
+  "part": "xc7z020-clg400-1"
+}
