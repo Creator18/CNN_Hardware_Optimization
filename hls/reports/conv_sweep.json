@@ -1,0 +1,38 @@
+[
+  {
+    "unroll": 1,
+    "latency_cycles": 38951231,
+    "latency_us": 288394.914324,
+    "dsp": 6,
+    "lut": 6544,
+    "bram_18k": 220,
+    "fits_xc7z020": true
+  },
+  {
+    "unroll": 2,
+    "latency_cycles": 3627329,
+    "latency_us": 26856.743916,
+    "dsp": 322,
+    "lut": 62790,
+    "bram_18k": 166,
+    "fits_xc7z020": false
+  },
+  {
+    "unroll": 4,
+    "latency_cycles": 2021697,
+    "latency_us": 14968.644588,
+    "dsp": 322,
+    "lut": 60730,
+    "bram_18k": 184,
+    "fits_xc7z020": false
+  },
+  {
+    "unroll": 8,
+    "latency_cycles": 1218881,
+    "latency_us": 9024.594924,
+    "dsp": 322,
+    "lut": 72616,
+    "bram_18k": 220,
+    "fits_xc7z020": false
+  }
+]

@@ -1,0 +1,22 @@
+{
+  "clock_period_ns": 7.3,
+  "latency_cycles_best": 512540,
+  "latency_cycles_worst": 512540,
+  "latency_us_worst": 3741.542,
+  "initiation_interval": 512541,
+  "dsp": 1,
+  "bram_18k": 5,
+  "ff": 2822,
+  "lut": 3649,
+  "util": {
+    "dsp": 0.0045,
+    "bram": 0.0179,
+    "ff": 0.0265,
+    "lut": 0.0686
+  },
+  "fits_xc7z020": true,
+  "source_report": "work\\fc_u1\\hls\\syn\\report\\fc_top_csynth.xml",
+  "design_point": "fc_u1",
+  "kernel": "fc",
+  "part": "xc7z020-clg400-1"
+}

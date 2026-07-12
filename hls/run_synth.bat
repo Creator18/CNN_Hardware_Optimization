@@ -19,10 +19,17 @@ call "%VITIS_SETTINGS%"
 
 if "%XILINXD_LICENSE_FILE%"=="" set XILINXD_LICENSE_FILE=%USERPROFILE%\.Xilinx\Xilinx.lic
 
-for %%K in (conv3x3 depthwise3x3 pointwise batchnorm) do (
+REM `call` is required: v++ is v++.bat, and invoking it without call terminates
+REM this script after the first iteration.
+for %%K in (conv3x3 depthwise3x3 pointwise batchnorm relu pool fc) do (
     echo ==== Synthesizing %%K ====
-    v++ -c --mode hls --config hls_%%K.cfg --work_dir work\%%K
+    call v++ -c --mode hls --config hls_%%K.cfg --work_dir work\%%K
 )
+
+REM Optional: conv IC_UNROLL sweep (latency-vs-DSP). Override the macro via
+REM -DIC_UNROLL=N; parse_hls_report.py reads work\conv3x3_u* into conv_sweep.json.
+REM   v++ -c --mode hls --config hls_conv3x3.cfg --work_dir work\conv3x3_u8 ^
+REM       --hls.syn.file_cflags "kernels/conv3x3.cpp,-I./kernels -DIC_UNROLL=8"
 
 echo.
 echo Synthesis done. Now run:  python parse_hls_report.py  ^&^&  python fpga_constants_from_hls.py

@@ -1,30 +1,74 @@
 {
+  "_note": "efficiency = macs_per_cycle/220 (fraction of DSP peak, same scale as trial2 hand-set); fpga_bytes_per_cycle grounds the memory roofline. INT8; each op at a device-fitting point.",
   "CONV": {
-    "macs_per_cycle": 57.1824,
-    "dsp": 322,
-    "efficiency_per_dsp": 0.1776,
-    "latency_us": 14968.644588,
-    "initiation_interval": 2021698
+    "efficiency": 0.0135,
+    "macs_per_cycle": 2.968,
+    "dsp": 6,
+    "efficiency_per_dsp": 0.4947,
+    "bytes_per_cycle": 0.027,
+    "design_point": "conv3x3_u1",
+    "latency_us": 288394.914324,
+    "fits_xc7z020": true
   },
   "DEPTHWISE_CONV": {
-    "macs_per_cycle": 1.0,
-    "dsp": 9,
-    "efficiency_per_dsp": 0.1111,
-    "latency_us": 19779.5763,
-    "initiation_interval": 2709532
+    "efficiency": 0.0133,
+    "macs_per_cycle": 2.9288,
+    "dsp": 8,
+    "efficiency_per_dsp": 0.3661,
+    "bytes_per_cycle": 1.628,
+    "design_point": "dw_u1",
+    "latency_us": 6849.581076,
+    "fits_xc7z020": false
   },
   "POINTWISE_CONV": {
-    "macs_per_cycle": 0.9994,
+    "efficiency": 0.0344,
+    "macs_per_cycle": 7.5788,
     "dsp": 16,
-    "efficiency_per_dsp": 0.0625,
-    "latency_us": 79163.87909999999,
-    "initiation_interval": 10844368
+    "efficiency_per_dsp": 0.4737,
+    "bytes_per_cycle": 1.318,
+    "design_point": "pointwise",
+    "latency_us": 10588.075391999999,
+    "fits_xc7z020": true
   },
   "BATCHNORM": {
-    "macs_per_cycle": 0.9939,
+    "efficiency": 0.0091,
+    "macs_per_cycle": 1.9983,
+    "dsp": 64,
+    "efficiency_per_dsp": 0.0312,
+    "bytes_per_cycle": 4.996,
+    "design_point": "batchnorm",
+    "latency_us": 1466.3948,
+    "fits_xc7z020": true
+  },
+  "RELU": {
+    "efficiency": 0.0045,
+    "macs_per_cycle": 0.9999,
+    "dsp": 0,
+    "efficiency_per_dsp": 0.9999,
+    "bytes_per_cycle": 5.0,
+    "design_point": "relu",
+    "latency_us": 1465.2778999999998,
+    "fits_xc7z020": true
+  },
+  "POOL": {
+    "efficiency": 0.008,
+    "macs_per_cycle": 1.756,
+    "dsp": 0,
+    "efficiency_per_dsp": 1.756,
+    "bytes_per_cycle": 1.561,
+    "design_point": "pool",
+    "latency_us": 7509.0574,
+    "fits_xc7z020": false
+  },
+  "FC": {
+    "efficiency": 0.0045,
+    "macs_per_cycle": 0.9989,
     "dsp": 1,
-    "efficiency_per_dsp": 0.9939,
-    "latency_us": 1474.1255,
-    "initiation_interval": 201936
-  }
+    "efficiency_per_dsp": 0.9989,
+    "bytes_per_cycle": 1.008,
+    "design_point": "fc_u1",
+    "latency_us": 3741.542,
+    "fits_xc7z020": true
+  },
+  "fpga_bytes_per_cycle": 4.996
 }

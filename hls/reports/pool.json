@@ -1,0 +1,22 @@
+{
+  "clock_period_ns": 7.3,
+  "latency_cycles_best": 1028638,
+  "latency_cycles_worst": 1028638,
+  "latency_us_worst": 7509.0574,
+  "initiation_interval": 1028639,
+  "dsp": 0,
+  "bram_18k": 514,
+  "ff": 9317,
+  "lut": 27476,
+  "util": {
+    "dsp": 0.0,
+    "bram": 1.8357,
+    "ff": 0.0876,
+    "lut": 0.5165
+  },
+  "fits_xc7z020": false,
+  "source_report": "work\\pool\\hls\\syn\\report\\pool_top_csynth.xml",
+  "design_point": "pool",
+  "kernel": "pool",
+  "part": "xc7z020-clg400-1"
+}

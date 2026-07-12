@@ -14,9 +14,11 @@
 // ============================================================================
 #include "common.h"
 
-// Parallel MACs across input channels (bounds DSP usage; keep modest so the
-// schedule stays tractable and DSP fits the xc7z020's 220).
+// Parallel MACs across input channels (bounds DSP usage). Overridable via
+// -DIC_UNROLL=N (used by the run_synth sweep) so we can trace latency vs DSP.
+#ifndef IC_UNROLL
 #define IC_UNROLL 4
+#endif
 
 template <int CIN, int COUT, int H, int W, int K = 3>
 void conv3x3(const data_t in[CIN][H][W],

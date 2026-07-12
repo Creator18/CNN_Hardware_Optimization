@@ -1,20 +1,22 @@
 {
-  "clock_period_ns": 7.3,
-  "latency_cycles_best": 2709531,
-  "latency_cycles_worst": 2709531,
-  "latency_us_worst": 19779.5763,
-  "initiation_interval": 2709532,
-  "dsp": 9,
-  "bram_18k": 4,
-  "ff": 4895,
-  "lut": 5844,
+  "clock_period_ns": 7.404,
+  "latency_cycles_best": 925119,
+  "latency_cycles_worst": 925119,
+  "latency_us_worst": 6849.581076,
+  "initiation_interval": 925120,
+  "dsp": 8,
+  "bram_18k": 292,
+  "ff": 5639,
+  "lut": 8243,
   "util": {
-    "dsp": 0.0409,
-    "bram": 0.0143,
-    "ff": 0.046,
-    "lut": 0.1098
+    "dsp": 0.0364,
+    "bram": 1.0429,
+    "ff": 0.053,
+    "lut": 0.1549
   },
-  "source_report": "work\\depthwise3x3\\hls\\syn\\report\\depthwise3x3_top_csynth.xml",
+  "fits_xc7z020": false,
+  "source_report": "work\\dw_u1\\hls\\syn\\report\\depthwise3x3_top_csynth.xml",
+  "design_point": "dw_u1",
   "kernel": "depthwise3x3",
   "part": "xc7z020-clg400-1"
 }

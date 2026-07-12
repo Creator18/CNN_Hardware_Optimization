@@ -1,0 +1,22 @@
+{
+  "clock_period_ns": 7.3,
+  "latency_cycles_best": 200723,
+  "latency_cycles_worst": 200723,
+  "latency_us_worst": 1465.2778999999998,
+  "initiation_interval": 200724,
+  "dsp": 0,
+  "bram_18k": 2,
+  "ff": 12209,
+  "lut": 19699,
+  "util": {
+    "dsp": 0.0,
+    "bram": 0.0071,
+    "ff": 0.1147,
+    "lut": 0.3703
+  },
+  "fits_xc7z020": true,
+  "source_report": "work\\relu\\hls\\syn\\report\\relu_top_csynth.xml",
+  "design_point": "relu",
+  "kernel": "relu",
+  "part": "xc7z020-clg400-1"
+}
