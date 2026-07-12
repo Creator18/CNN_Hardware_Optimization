@@ -1,0 +1,18 @@
+{
+  "_note": "Post-place-and-route implementation results for the DSP-tiled conv (conv_tiled.cpp, TM=16, TN=8) on xc7z020 via Vivado OOC synthesis+implementation. Validates the C-synthesis estimates end-to-end (C-synth -> C-sim -> synth -> P&R -> timing closure).",
+  "kernel": "conv_tiled",
+  "TM": 16, "TN": 8,
+  "part": "xc7z020-clg400-1",
+  "target_clock_ns": 10.0,
+  "csim": "PASS (matches reference conv on all 200704 outputs)",
+  "cp_post_synthesis_ns": 7.262,
+  "cp_post_implementation_ns": 9.866,
+  "timing_met": true,
+  "fmax_mhz_post_impl": 101.4,
+  "post_impl_resources": {
+    "LUT": 11011, "FF": 7995, "DSP": 73, "BRAM_18K": 258
+  },
+  "xc7z020_totals": {"LUT": 53200, "FF": 106400, "DSP": 220, "BRAM_18K": 280},
+  "post_impl_utilization_pct": {"LUT": 20.7, "FF": 7.5, "DSP": 33.2, "BRAM_18K": 92.1},
+  "binding_constraint": "BRAM (on-chip input/weight cache)"
+}

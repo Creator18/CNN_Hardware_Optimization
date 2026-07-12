@@ -27,7 +27,9 @@ XC7Z020 = {"DSP": 220, "BRAM_18K": 280, "FF": 106400, "LUT": 53200}
 # xc7z020 with the best throughput (lowest latency); if none fit, the lowest-DSP
 # candidate is kept and flagged. Memory-bound ops fit best at low unroll.
 OP_CANDIDATES = {
-    "conv3x3":      ["conv3x3_u1", "conv3x3_u2", "conv3x3_u4", "conv3x3_u8"],
+    # conv now uses the output-stationary DSP-tiled kernel (conv_tiled.cpp),
+    # which removed the naive kernel's DSP cliff. Best-fitting point is chosen.
+    "conv3x3":      ["conv_tiled_16x16", "conv_tiled_16x12", "conv_tiled_16x8", "conv_tiled_8x8"],
     "depthwise3x3": ["dw_u1", "dw_u2", "depthwise3x3"],
     "pointwise":    ["pointwise"],
     "batchnorm":    ["batchnorm"],
@@ -35,7 +37,10 @@ OP_CANDIDATES = {
     "pool":         ["pool"],
     "fc":           ["fc_u1", "fc"],
 }
-CONV_SWEEP = {1: "conv3x3_u1", 2: "conv3x3_u2", 4: "conv3x3_u4", 8: "conv3x3_u8"}
+# Tiled-conv latency-vs-DSP sweep (parallel MACs = TM*TN); replaces the naive
+# IC_UNROLL sweep. Keyed by TM*TN for the figure label.
+CONV_SWEEP = {64: "conv_tiled_8x8", 128: "conv_tiled_16x8",
+              192: "conv_tiled_16x12", 256: "conv_tiled_16x16"}
 
 
 def _txt(node, path, cast=float, default=None):

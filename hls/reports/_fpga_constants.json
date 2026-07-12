@@ -1,13 +1,13 @@
 {
   "_note": "efficiency = macs_per_cycle/220 (fraction of DSP peak, same scale as trial2 hand-set); fpga_bytes_per_cycle grounds the memory roofline. INT8; each op at a device-fitting point.",
   "CONV": {
-    "efficiency": 0.0135,
-    "macs_per_cycle": 2.968,
-    "dsp": 6,
-    "efficiency_per_dsp": 0.4947,
-    "bytes_per_cycle": 0.027,
-    "design_point": "conv3x3_u1",
-    "latency_us": 288394.914324,
+    "efficiency": 0.2865,
+    "macs_per_cycle": 63.0284,
+    "dsp": 72,
+    "efficiency_per_dsp": 0.8754,
+    "bytes_per_cycle": 0.567,
+    "design_point": "conv_tiled_16x8",
+    "latency_us": 13580.283527999998,
     "fits_xc7z020": true
   },
   "DEPTHWISE_CONV": {

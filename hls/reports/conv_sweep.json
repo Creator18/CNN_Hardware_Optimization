@@ -1,38 +1,38 @@
 [
   {
-    "unroll": 1,
-    "latency_cycles": 38951231,
-    "latency_us": 288394.914324,
-    "dsp": 6,
-    "lut": 6544,
-    "bram_18k": 220,
+    "unroll": 64,
+    "latency_cycles": 3051634,
+    "latency_us": 22594.298136,
+    "dsp": 40,
+    "lut": 11447,
+    "bram_18k": 196,
     "fits_xc7z020": true
   },
   {
-    "unroll": 2,
-    "latency_cycles": 3627329,
-    "latency_us": 26856.743916,
-    "dsp": 322,
-    "lut": 62790,
-    "bram_18k": 166,
+    "unroll": 128,
+    "latency_cycles": 1834182,
+    "latency_us": 13580.283527999998,
+    "dsp": 72,
+    "lut": 17483,
+    "bram_18k": 260,
+    "fits_xc7z020": true
+  },
+  {
+    "unroll": 192,
+    "latency_cycles": 1495506,
+    "latency_us": 11072.726424,
+    "dsp": 166,
+    "lut": 21775,
+    "bram_18k": 388,
     "fits_xc7z020": false
   },
   {
-    "unroll": 4,
-    "latency_cycles": 2021697,
-    "latency_us": 14968.644588,
-    "dsp": 322,
-    "lut": 60730,
-    "bram_18k": 184,
-    "fits_xc7z020": false
-  },
-  {
-    "unroll": 8,
-    "latency_cycles": 1218881,
-    "latency_us": 9024.594924,
-    "dsp": 322,
-    "lut": 72616,
-    "bram_18k": 220,
+    "unroll": 256,
+    "latency_cycles": 1370054,
+    "latency_us": 10143.879815999999,
+    "dsp": 136,
+    "lut": 26982,
+    "bram_18k": 388,
     "fits_xc7z020": false
   }
 ]
