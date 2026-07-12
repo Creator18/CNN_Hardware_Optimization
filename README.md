@@ -24,6 +24,7 @@ INT8 compression, and calibration-based scheduling.
 | Dir | Purpose |
 |-----|---------|
 | [`hls/`](hls) | Vitis HLS kernels + flow that synthesize conv / depthwise / pointwise / batchnorm for the **Zynq-7020 (xc7z020)** and export per-op latency, initiation interval, and DSP/BRAM/LUT into `hls/reports/*.json`. These replace the hand-set FPGA efficiency constants. See [`hls/README.md`](hls/README.md). |
+| [`gpu/`](gpu) | Measures **per-op GPU efficiency** on the local CUDA GPU (batch=1), grounding the GPU side of the cost model. See [`gpu/README.md`](gpu/README.md). |
 | [`calibration/`](calibration) | Published-benchmark dataset + **leave-one-out cross-validation** harness, turning the unit→ms calibration from a per-point fit into a real generalization test. See [`calibration/schema.md`](calibration/schema.md). |
 
 These need no FPGA board — HLS C-synthesis runs on CPU (free Vivado Basic tier).

@@ -1,0 +1,40 @@
+{
+  "_note": "efficiency = achieved GMAC/s / peak GMAC/s (batch=1, FP32, measured on NVIDIA GeForce RTX 4070 Laptop GPU). Replaces trial2 hand-set parallel_efficiency.",
+  "device": "NVIDIA GeForce RTX 4070 Laptop GPU",
+  "peak_gmac_s": 1489.15,
+  "CONV": {
+    "efficiency": 1.0,
+    "latency_us": 77.632,
+    "achieved_gmac_s": 1489.148
+  },
+  "DEPTHWISE_CONV": {
+    "efficiency": 0.0596,
+    "latency_us": 30.528,
+    "achieved_gmac_s": 88.755
+  },
+  "POINTWISE_CONV": {
+    "efficiency": 0.1167,
+    "latency_us": 62.368,
+    "achieved_gmac_s": 173.775
+  },
+  "BATCHNORM": {
+    "efficiency": 0.0069,
+    "latency_us": 38.912,
+    "achieved_gmac_s": 10.316
+  },
+  "RELU": {
+    "efficiency": 0.0068,
+    "latency_us": 19.712,
+    "achieved_gmac_s": 10.182
+  },
+  "POOL": {
+    "efficiency": 0.0515,
+    "latency_us": 23.552,
+    "achieved_gmac_s": 76.696
+  },
+  "FC": {
+    "efficiency": 0.0067,
+    "latency_us": 51.2,
+    "achieved_gmac_s": 10.0
+  }
+}
