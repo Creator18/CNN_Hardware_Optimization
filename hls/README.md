@@ -40,23 +40,29 @@ compiler: **`v++ -c --mode hls --config <kernel>.cfg --work_dir work/<kernel>`**
    then import `_fpga_constants.json` into `trial2.ipynb` to replace the
    hand-set `streaming_efficiency` values.
 
-## First-run results & honesty
-The current kernels are **naive representative datapaths**, not optimized
-accelerators, and the numbers show it:
+## Results & honesty
+Synthesized on xc7z020 (numbers in `reports/`):
 
-| op | MACs/cycle | DSP (xc7z020 has 220) | note |
-|----|-----------|------------------------|------|
-| conv3x3 | 0.08 | 575 (261%, over-maps) | memory-port bound as written — needs line buffers / array partitioning / tiling for a fair number |
-| depthwise3x3 | 1.00 | 9 | streams cleanly |
-| pointwise | 1.00 | 16 | streams cleanly |
-| batchnorm | 0.99 | 1 | near-free, as expected |
+| op | MACs/cycle | DSP (of 220) | eff/DSP | note |
+|----|-----------|--------------|---------|------|
+| conv3x3 | 57.2 | 322 (146%, over-maps) | 0.178 | on-chip cached + zero-padded + IC_UNROLL=4; high throughput but exceeds the 7020 → must be tiled/time-multiplexed in practice (consistent with the paper: dense conv is the FPGA's hard case) |
+| depthwise3x3 | 1.00 | 9 | 0.111 | single-lane; streams cleanly |
+| pointwise | 1.00 | 16 | 0.062 | single-lane; streams cleanly |
+| batchnorm | 0.99 | 1 | 0.994 | near-free, as expected |
 
-The qualitative ordering already matches the paper's thesis (BN/depthwise stream
-efficiently; dense conv is the hard case). But before using these as cost
-constants, **tune the conv kernel** (add local buffering so it isn't bound by
-`m_axi` port contention) and ideally **sweep pragmas** to report a
-latency-vs-DSP range — which pairs naturally with the Monte-Carlo uncertainty
-analysis (#6) in the notebook. Report the design point(s) you actually use.
+The qualitative ordering matches the paper's thesis (BN/depthwise/pointwise
+stream efficiently; dense conv is expensive and doesn't fit).
+
+**Two caveats before using these as final cost constants:**
+1. **Unmatched parallelism.** conv3x3 is unrolled (IC_UNROLL=4) while the others
+   are single-lane, so raw MACs/cycle isn't apples-to-apples. `eff/DSP`
+   (throughput per DSP) is the fairer normalized metric, but for a clean
+   comparison give all four kernels comparable parallelism.
+2. **Sweep the design space.** Vary `IC_UNROLL` (in `kernels/conv3x3.cpp`) and
+   report a latency-vs-DSP curve rather than one point — this feeds the
+   Monte-Carlo uncertainty analysis (#6) and shows the fit/throughput tradeoff.
+
+Report the design point(s) you actually use in the paper.
 
 Shapes to synthesize live in each `*_top()` and in the `.cfg` files; edit them to
 match specific layers from `build_resnet18` / `build_mobilenetv2` in the notebooks.

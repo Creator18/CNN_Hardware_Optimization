@@ -2,8 +2,10 @@
 # Vitis HLS / Vivado build artifacts — NEVER commit these
 # (they are gigabytes of regenerable binary/intermediate junk)
 # ============================================================
-hls/work/              # v++ --work_dir output (synthesis build dirs)
-hls/projects/          # leftover from earlier classic-Tcl attempts
+# v++ --work_dir output (synthesis build dirs)
+hls/work/
+# leftover from earlier classic-Tcl attempts
+hls/projects/
 hls/*.log
 *.jou
 vivado*.jou

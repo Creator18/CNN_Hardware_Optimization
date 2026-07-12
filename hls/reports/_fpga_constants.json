@@ -1,10 +1,10 @@
 {
   "CONV": {
-    "macs_per_cycle": 0.0762,
-    "dsp": 575,
-    "efficiency_per_dsp": 0.0001,
-    "latency_us": 11077917.564199999,
-    "initiation_interval": 270950411
+    "macs_per_cycle": 57.1824,
+    "dsp": 322,
+    "efficiency_per_dsp": 0.1776,
+    "latency_us": 14968.644588,
+    "initiation_interval": 2021698
   },
   "DEPTHWISE_CONV": {
     "macs_per_cycle": 1.0,
