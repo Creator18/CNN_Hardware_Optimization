@@ -25,7 +25,7 @@
 \maketitle
 
 \begin{abstract}
-Deploying convolutional neural networks (CNNs) on resource-constrained edge devices demands efficient utilization of heterogeneous computing resources. This paper presents an adaptive framework for CNN inference acceleration that partitions network workloads between GPU and FPGA devices through runtime operator fusion, quantization-aware compression, and calibration-based scheduling. The framework is evaluated through three progressively more grounded methodologies: an analytical roofline simulation across six architectures, a functional emulation with real tensor operations, and---new in this work---a \emph{hardware-grounded} evaluation in which the FPGA cost model is derived from Vitis HLS synthesis for the Zynq~7020 and the GPU cost model from direct measurement on an RTX~4070. The analytical model shows up to 11.8\% throughput gain for depthwise-separable networks; the emulation reveals that CNN inference is memory-bound, collapsing the effective FPGA-to-GPU ratio from 36.9$\times$ to near 1$\times$. Grounding the cost model in synthesis confirms the heterogeneous benefit is strongly architecture-dependent: after cross-device calibration and a discrete-event pipeline simulation, MobileNetV2 retains a robust $+81\%$ sustained throughput gain, whereas the conv-heavy ResNet-18 gain is marginal and evaporates under realistic streaming, being limited by the FPGA's convolution datapath. A Monte-Carlo analysis over the synthesized constants keeps both gains' sign stable ($P(\text{gain}>0)=100\%$). Finally, we correct an over-optimistic in-model predictor result: under leave-one-architecture-out evaluation on synthesized targets, scheduling regret is 0--26\% rather than the 0.20\% obtained when training and testing on the analytical formula itself.
+Deploying convolutional neural networks (CNNs) on resource-constrained edge devices demands efficient utilization of heterogeneous computing resources. This paper presents an adaptive framework for CNN inference acceleration that partitions network workloads between GPU and FPGA devices through runtime operator fusion, quantization-aware compression, and calibration-based scheduling. The framework is evaluated through three progressively more grounded methodologies: an analytical roofline simulation across six architectures, a functional emulation with real tensor operations, and---new in this work---a \emph{hardware-grounded} evaluation in which the FPGA cost model is derived from Vitis HLS synthesis for the Zynq~7020 and the GPU cost model from direct measurement on an RTX~4070. The analytical model demonstrates up to 11.8\% throughput gain for MobileNetV2 and identifies depthwise separable architectures as the primary beneficiaries. The functional emulation reveals that CNN inference is overwhelmingly memory-bound on both devices, reducing the effective FPGA-to-GPU performance ratio from 36.9$\times$ (analytical) to 1.0$\times$ (emulated) for ResNet-18. When calibrated against published hardware benchmarks, the emulated model identifies a break-even FPGA performance of 1.5$\times$ current Zynq~7020 levels for ResNet-18 and 3$\times$ for MobileNetV2, with UltraScale+ projections of +35\% to +140\%. Grounding the cost model in synthesis then confirms the heterogeneous benefit is strongly architecture-dependent: after cross-device calibration and a discrete-event pipeline simulation, MobileNetV2 retains a robust $+81\%$ sustained gain, whereas the conv-heavy ResNet-18 gain is marginal and evaporates under realistic streaming, being limited by the FPGA convolution datapath. A Monte-Carlo analysis over the synthesized constants keeps both gains' sign stable ($P(\text{gain}>0)=100\%$). Finally, we correct an over-optimistic in-model predictor result: under leave-one-architecture-out evaluation on synthesized targets, scheduling regret is 0--26\%, versus the 0.20\% obtained when training and testing on the analytical formula itself.
 
 \keywords{CNN acceleration \and FPGA \and GPU \and Heterogeneous computing \and High-level synthesis \and Operator fusion \and Quantization \and Edge inference \and Pipeline parallelism}
 \end{abstract}
@@ -36,45 +36,70 @@ Convolutional neural networks (CNNs) are widely used in edge applications such a
 
 This paper explores a different approach: using both devices simultaneously. The idea is to split a CNN across a GPU and an FPGA such that each device handles the portion of the network best suited to its strengths. Different CNN layers have very different computational profiles. A standard 3$\times$3 convolution is compute-heavy and highly parallelizable, making it ideal for the GPU. A depthwise separable convolution or a batch normalization layer is lightweight and memory-bound, making it well-suited to the FPGA's streaming datapaths. By assigning layers to the right device, the framework aims to improve throughput and energy efficiency over single-device execution.
 
-The framework addresses this through three mechanisms. First, it uses a roofline-based cost model to evaluate each layer's execution time on both devices and searches for the partition point that maximizes pipeline throughput for streaming inference. Second, it applies runtime operator fusion, collapsing consecutive layers (e.g., convolution, batch normalization, and ReLU) into single operators to eliminate intermediate memory accesses. Fused operators are further compressed via INT8 quantization, which both accelerates FPGA execution through fixed-point arithmetic and reduces inter-device transfer payloads to 25\% of their original size. Third, a lightweight calibration predictor estimates execution times for arbitrary fused blocks, enabling near-optimal split decisions without exhaustive search.
+The framework addresses this through three mechanisms. First, it uses a roofline-based cost model to evaluate each layer's execution time on both devices and searches for the partition point that maximizes pipeline throughput for streaming inference. Second, it applies runtime operator fusion, collapsing consecutive layers (e.g., convolution, batch normalization, and ReLU) into single operators to eliminate intermediate memory accesses. Fused operators are further compressed via INT8 quantization, which both accelerates FPGA execution through fixed-point arithmetic and reduces inter-device transfer payloads to 25\% of their original size. Third, a lightweight calibration predictor trained on a short profiling phase estimates execution times for arbitrary fused blocks, enabling near-optimal split decisions without exhaustive search.
 
-A central methodological concern in prior heterogeneous-mapping studies is that cost models rest on hand-set efficiency assumptions. A distinguishing feature of this work is that we progressively remove those assumptions: the third evaluation phase replaces the hand-set FPGA efficiencies with values obtained from High-Level Synthesis (HLS) targeting a real Zynq~7020 part, and replaces the hand-set GPU efficiencies with direct measurements on a physical GPU. This lets us test whether the conclusions survive contact with synthesized and measured costs---and to quantify the uncertainty and pipeline-realism that determine whether the predicted gains are attainable in practice.
+A key design choice is that the GPU does not simply compute its assigned layers and wait. Instead, it acts as a runtime compiler: while the FPGA executes one fused block, the GPU prepares the next by fusing layers, folding batch normalization parameters, and applying quantization. This overlapping pipeline keeps both devices utilized and targets sustained streaming throughput rather than single-inference latency.
+
+A recurring methodological concern is that such cost models rest on hand-set efficiency assumptions. A distinguishing feature of this work is that we progressively remove those assumptions: a third evaluation phase replaces the hand-set FPGA efficiencies with values obtained from High-Level Synthesis (HLS) targeting a real Zynq~7020 part, and replaces the hand-set GPU efficiencies with direct measurements on a physical GPU, then tests whether the conclusions survive.
 
 The contributions of this paper are:
+
 \begin{enumerate}
     \item A runtime operator fusion and offloading framework that partitions CNN inference across GPU and FPGA with complexity-aware mapping and pipeline-parallel execution.
-    \item An analytical simulation across six architectures showing up to 11.8\% throughput gain for depthwise separable networks.
-    \item A functional emulation methodology revealing that CNN inference is memory-bound and that analytical models based on peak FLOPS overestimate the GPU advantage by 10--37$\times$.
-    \item A \emph{hardware-grounded} evaluation that derives the FPGA cost model from Vitis HLS synthesis (Zynq~7020) and the GPU cost model from RTX~4070 measurements, showing the heterogeneous benefit is architecture-dependent: robust ($+81\%$) for depthwise-separable networks and marginal for conv-heavy networks under realistic streaming.
-    \item A cross-device calibration that resolves the different normalization scales of the two grounded models, a discrete-event pipeline simulation that tempers the idealized throughput ceiling, a Monte-Carlo uncertainty analysis, and an INT8 fidelity-versus-split analysis. Together these also correct an over-optimistic in-model predictor result, reporting a realistic 0--26\% scheduling regret under leave-one-architecture-out evaluation.
+    \item An analytical simulation across six architectures showing up to 11.8\% throughput gain for depthwise separable networks, with a calibration predictor achieving 0.20\% in-model scheduling regret.
+    \item A functional emulation methodology that models device-specific execution patterns, revealing that CNN inference is memory-bound and that analytical models based on peak FLOPS overestimate the GPU advantage by 10--37$\times$.
+    \item A calibrated break-even analysis grounded in published hardware benchmarks, projecting +35\% to +140\% throughput on UltraScale+ class hardware.
+    \item A \emph{hardware-grounded} evaluation that derives the FPGA cost model from Vitis HLS synthesis (Zynq~7020) and the GPU cost model from RTX~4070 measurements, adds cross-device calibration, a discrete-event pipeline simulation, a Monte-Carlo uncertainty analysis, and an INT8 fidelity study---showing the benefit is robust ($+81\%$) for depthwise-separable networks and marginal for conv-heavy networks, and correcting the predictor result to a realistic 0--26\% regret under leave-one-architecture-out evaluation.
 \end{enumerate}
 
-The remainder of this paper is organized as follows. Section~\ref{sec:methodology} presents the methodology. Section~\ref{sec:results} details the analytical and emulation results (Trials~1--2). Section~\ref{sec:grounded} presents the hardware-grounded evaluation (Trial~3). Section~\ref{sec:discussion} discusses findings and limitations. Section~\ref{sec:conclusion} concludes.
+The remainder of this paper is organized as follows. Section~\ref{sec:methodology} presents the proposed methodology. Section~\ref{sec:results} details the analytical and emulation results (Trials~1--2). Section~\ref{sec:grounded} presents the hardware-grounded evaluation (Trial~3). Section~\ref{sec:discussion} discusses findings and limitations. Section~\ref{sec:conclusion} concludes the paper.
 
 \section{Methodology}\label{sec:methodology}
 
 \subsection{System Overview}\label{sec:system_overview}
 
-The framework operates in two phases. In the \textit{calibration phase}, a short profiling procedure executes representative fused blocks on the target FPGA and GPU to collect execution-time measurements, used to train a lightweight latency predictor. In the \textit{inference phase}, the framework takes a CNN definition, applies operator fusion, queries the predictor for per-device costs, searches for the partition that maximizes pipeline throughput, and orchestrates pipelined execution.
+The proposed framework operates in two phases. In the \textit{calibration phase}, a short profiling procedure executes representative fused blocks on the target FPGA and GPU to collect execution time measurements. These measurements are used to train a lightweight latency predictor that can estimate costs for unseen blocks without re-profiling. In the \textit{inference phase}, the framework takes a CNN architecture definition, applies operator fusion rules to collapse consecutive layers into unified blocks, queries the predictor for estimated execution times on each device, searches for the partition point that maximizes pipeline throughput, and orchestrates the pipelined execution across both devices.
 
-The framework assumes a heterogeneous edge platform consisting of an edge GPU (e.g., NVIDIA Jetson Nano, 128 CUDA cores) and an FPGA (e.g., Xilinx Zynq~7020, 220 DSP slices) connected via PCIe or shared SoC memory. The GPU handles compute-intensive parallel operations; the FPGA handles streaming-friendly, memory-bound operations.
+The framework assumes a heterogeneous edge platform consisting of an edge GPU (e.g., NVIDIA Jetson Nano with 128 CUDA cores) and an FPGA (e.g., Xilinx Zynq 7020 with 220 DSP slices) connected either via PCIe or through shared memory on a system-on-chip. The GPU handles compute-intensive, highly parallel operations while the FPGA handles streaming-friendly, memory-bound operations.
 
 \subsection{Network Representation and Cost Model}\label{sec:cost_model}
 
-A CNN is a sequential list of $N$ layers $\{L_1, \ldots, L_N\}$, each characterized by type $\tau_i$, input/output dimensions, kernel size $k$, and stride $s$, with
+A CNN is represented as a sequential list of $N$ layers $\{L_1, L_2, \ldots, L_N\}$, where each layer $L_i$ is characterized by its type $\tau_i$, input dimensions $(C_{in}, H_{in}, W_{in})$, output dimensions $(C_{out}, H_{out}, W_{out})$, kernel size $k$, and stride $s$. The supported layer types are:
 \begin{equation}
-    \tau_i \in \{\text{CONV},\ \text{DW\_CONV},\ \text{PW\_CONV},\ \text{BN},\ \text{ReLU},\ \text{POOL},\ \text{FC}\}.
+    \tau_i \in \{\text{CONV},\ \text{DW\_CONV},\ \text{PW\_CONV},\ \text{BN},\ \text{ReLU},\ \text{POOL},\ \text{FC}\}
 \end{equation}
-Per-layer multiply-accumulate (MAC) counts follow standard formulas, e.g. $F_{\text{CONV}} = k^2 C_{in} C_{out} H_{out} W_{out}$, $F_{\text{DW}} = k^2 C_{in} H_{out} W_{out}$, $F_{\text{PW}} = C_{in} C_{out} H_{out} W_{out}$. Memory bytes accessed are $B_i = 4(C_{in}H_{in}W_{in} + C_{out}H_{out}W_{out} + P_i)$ (FP32), with $P_i$ the parameter count. The arithmetic intensity $A_i = F_i/B_i$ determines the compute/memory regime.
 
-Execution time on device $d$ follows the roofline model:
-\begin{equation}\label{eq:roofline}
-    T_d(L_i) = \max\!\left(\frac{F_i}{P_d \cdot \eta_d(\tau_i)},\ \frac{B_i}{\beta_d}\right),
+For each layer, the number of multiply-accumulate (MAC) operations is computed based on its type. For standard convolution:
+\begin{equation}
+    F_{\text{CONV}} = k^2 \cdot C_{in} \cdot C_{out} \cdot H_{out} \cdot W_{out}
 \end{equation}
-where $P_d$ is peak throughput, $\eta_d(\tau_i)\in(0,1]$ a per-op utilization efficiency, and $\beta_d$ memory bandwidth. Table~\ref{tab:efficiency} lists the efficiency factors used in Trials~1--2. \emph{These are hand-set in Trials~1--2 and replaced by synthesized/measured values in Trial~3 (Section~\ref{sec:grounded}).}
+For depthwise convolution, each input channel is convolved independently:
+\begin{equation}
+    F_{\text{DW}} = k^2 \cdot C_{in} \cdot H_{out} \cdot W_{out}
+\end{equation}
+For pointwise (1$\times$1) convolution:
+\begin{equation}
+    F_{\text{PW}} = C_{in} \cdot C_{out} \cdot H_{out} \cdot W_{out}
+\end{equation}
+
+The total memory bytes accessed per layer includes reading the input tensor, writing the output tensor, and loading the parameters:
+\begin{equation}
+    B_i = 4 \cdot (C_{in} H_{in} W_{in} + C_{out} H_{out} W_{out} + P_i)
+\end{equation}
+where $P_i$ is the parameter count and the factor of 4 converts element counts to bytes (FP32).
+
+The \textit{arithmetic intensity} of a layer, defined as $A_i = F_i / B_i$ (MACs per byte), determines whether execution is compute-bound or memory-bound. Standard convolutions typically have high arithmetic intensity (30--80 MACs/byte) while depthwise convolutions and batch normalization have low intensity (0.1--1.0 MACs/byte).
+
+The execution time on device $d \in \{\text{GPU}, \text{FPGA}\}$ follows the roofline model:
+\begin{equation}\label{eq:roofline}
+    T_d(L_i) = \max\left(\frac{F_i}{P_d \cdot \eta_d(\tau_i)},\ \frac{B_i}{\beta_d}\right)
+\end{equation}
+The first term represents compute-bound execution: $F_i$ operations divided by the device's effective throughput, which is peak throughput $P_d$ (in FLOPS) scaled by utilization efficiency $\eta_d(\tau_i) \in (0, 1]$. The second term represents memory-bound execution: $B_i$ bytes divided by memory bandwidth $\beta_d$. The actual execution time is whichever bottleneck dominates.
+
+The efficiency factors $\eta_d(\tau_i)$ encode how well each device architecture maps to each operation type. These reflect fundamental architectural properties: GPUs have thousands of identical cores that excel at regular, data-parallel operations but underutilize their compute on small or irregular workloads. FPGAs have custom streaming datapaths that efficiently pipeline data-flow operations but have limited parallel multiply-accumulate capacity. Table~\ref{tab:efficiency} summarizes the values used in Trials~1--2. \emph{These hand-set factors are replaced by HLS-synthesized (FPGA) and measured (GPU) values in Trial~3 (Section~\ref{sec:grounded}).}
 
 \begin{table}
-\caption{Device utilization efficiency factors $\eta_d(\tau)$ used in Trials~1--2 (hand-set). Trial~3 replaces these with HLS-synthesized (FPGA) and measured (GPU) values.}\label{tab:efficiency}
+\caption{Device utilization efficiency factors $\eta_d(\tau)$ used in Trials~1--2. GPU efficiency is high for parallelizable operations and low for memory-bound operations. FPGA efficiency is high for streaming-friendly operations and low for operations requiring large weight matrices.}\label{tab:efficiency}
 \centering
 \begin{tabular}{lcc}
 \toprule
@@ -91,29 +116,134 @@ Fully Connected & 0.50 & 0.35 \\
 \end{tabular}
 \end{table}
 
+For the GPU, standard convolutions achieve 0.65 efficiency because they offer massive data parallelism across output channels and spatial positions, but do not perfectly saturate memory bandwidth. Depthwise convolutions achieve only 0.20 because each channel has very few MACs (just $k^2$ per spatial position), leaving most CUDA cores idle. Batch normalization and ReLU are element-wise operations with negligible compute, making them purely memory-bound at 0.10--0.15 efficiency. For the FPGA, the pattern is inverted: depthwise convolutions achieve 0.80 because the FPGA can build a dedicated streaming pipeline that processes each channel in a single pass, batch normalization and ReLU fuse into the datapath at near-zero cost (0.85--0.90), and standard convolutions are limited to 0.45 because the large number of MAC operations exceeds the DSP slices available in parallel.
+
 \subsection{Operator Fusion}\label{sec:fusion}
 
-Operator fusion collapses compatible layer sequences into single operators, keeping intermediate activations on-chip. Six patterns are matched greedily by decreasing length: CONV/DW\_CONV/PW\_CONV followed by BN($\rightarrow$ReLU). Convolution-batchnorm folding is exact: given $y=W\ast x + b$ and $z = \gamma(y-\mu)/\sqrt{\sigma^2+\epsilon}+\beta$, the fused weights are $W_{\text{fold}} = \frac{\gamma}{\sqrt{\sigma^2+\epsilon}}W$ and $b_{\text{fold}} = \frac{\gamma}{\sqrt{\sigma^2+\epsilon}}(b-\mu)+\beta$. For ResNet-18, fusion reduces 54 layers to 20 blocks; for MobileNetV2, 133 to 51.
+Operator fusion collapses sequences of compatible layers into single operators, eliminating intermediate tensor materialization. When layers are executed individually, each layer's output is written to external memory (DRAM) and the next layer reads it back. Fusion keeps intermediate activations in on-chip memory (registers for GPU, BRAM for FPGA), removing these costly round-trips.
 
-\subsection{INT8 Quantization and Pipeline Optimization}\label{sec:quant_partition}
+The framework defines six fusible patterns, matched greedily in order of decreasing length:
+\begin{enumerate}
+    \item CONV $\rightarrow$ BN $\rightarrow$ ReLU (three layers into one)
+    \item DW\_CONV $\rightarrow$ BN $\rightarrow$ ReLU
+    \item PW\_CONV $\rightarrow$ BN $\rightarrow$ ReLU
+    \item CONV $\rightarrow$ BN (two layers into one)
+    \item DW\_CONV $\rightarrow$ BN
+    \item PW\_CONV $\rightarrow$ BN
+\end{enumerate}
 
-Fused blocks dispatched to the FPGA are INT8-quantized, both accelerating fixed-point arithmetic and shrinking the inter-device transfer payload to $q/32$ of FP32. For streaming workloads, the partition optimizer splits the $K$ fused blocks at point $s$ (GPU handles $1{:}s$, FPGA handles $s{+}1{:}K$) and maximizes sustained pipeline throughput
-\begin{equation}\label{eq:throughput}
-    \Theta(s) = \frac{1}{\max\!\left(T_{\text{GPU}}^{\text{stage}}(s),\ T_{\text{FPGA}}^{\text{stage}}(s)+T_{\text{xfer}}(s)\right)},
+The mathematical basis for convolution-batchnorm fusion is as follows. Given a convolution output $y = W \ast x + b$ followed by batch normalization $z = \gamma \cdot (y - \mu) / \sqrt{\sigma^2 + \epsilon} + \beta$, the fused operation is:
+\begin{equation}\label{eq:bn_fold}
+    z = W_{\text{fold}} \ast x + b_{\text{fold}}
 \end{equation}
-selecting $s^\ast = \arg\max_s \Theta(s)$ by exhaustive search over the $K-1$ candidates. Pipeline efficiency $E(s)=\min(\cdot)/\max(\cdot)$ measures stage balance. Equation~\eqref{eq:throughput} assumes perfect overlap and infinite buffering; Section~\ref{sec:e10} relaxes both.
+where the folded parameters are:
+\begin{equation}
+    W_{\text{fold}} = \frac{\gamma}{\sqrt{\sigma^2 + \epsilon}} \cdot W, \quad
+    b_{\text{fold}} = \frac{\gamma}{\sqrt{\sigma^2 + \epsilon}} \cdot (b - \mu) + \beta
+\end{equation}
+This folding is exact (not an approximation) and eliminates the BN layer entirely at inference time. ReLU is then applied in-place to the convolution output with no additional memory access.
+
+A fused block $\mathcal{B}_j = \{L_a, L_{a+1}, \ldots, L_{a+m}\}$ has execution time:
+\begin{equation}\label{eq:fusion_time}
+    T_d(\mathcal{B}_j) = \sigma_p \cdot \sum_{i=a}^{a+m} T_d(L_i)
+\end{equation}
+where $\sigma_p \in (0, 1)$ is the fusion speedup factor for pattern $p$, set between 0.75 and 0.85 depending on the pattern. The memory traffic saved by fusion is:
+\begin{equation}
+    M_{\text{saved}} = 2 \sum_{i=a}^{a+m-1} |O_i|
+\end{equation}
+where the factor of 2 accounts for both the write by layer $i$ and the read by layer $i+1$, and $|O_i|$ is the output tensor size in bytes. For ResNet-18, fusion reduces 54 layers to 20 blocks and eliminates 36 MB of intermediate memory traffic. For MobileNetV2, 133 layers reduce to 51 blocks with 29.5 MB eliminated.
+
+\subsection{INT8 Quantization and Compression}\label{sec:quantization}
+
+Fused blocks dispatched to the FPGA are compressed via INT8 quantization, which provides two distinct benefits.
+
+First, FPGA throughput increases by a factor $\alpha_q$ because INT8 arithmetic units consume fewer logic resources than FP32 units, allowing more parallel multiply-accumulate operations to be instantiated in the same FPGA fabric, and can be clocked higher. For INT8, $\alpha_q = 2.5$:
+\begin{equation}\label{eq:quant_speedup}
+    T_{\text{FPGA}}^{q}(\mathcal{B}_j) = \frac{T_{\text{FPGA}}(\mathcal{B}_j)}{\alpha_q}
+\end{equation}
+
+Second, activation tensors transferred between devices are compressed by the ratio $q/32$ (where $q$ is the quantization bit-width), reducing both the transfer payload and the FPGA-side memory bandwidth:
+\begin{equation}\label{eq:transfer}
+    T_{\text{xfer}}^{q} = T_{\text{setup}} + \frac{|O| \cdot (q/32)}{\beta_{\text{xfer}}}
+\end{equation}
+where $T_{\text{setup}}$ is the fixed DMA setup latency (50 $\mu$s for PCIe, 5 $\mu$s for unified memory) and $\beta_{\text{xfer}}$ is the interconnect bandwidth (4.0 GB/s for PCIe Gen3 x4, 25.6 GB/s for shared DRAM). Combined with fusion, INT8 reduces total FPGA execution time by approximately 67\% relative to unfused FP32 across all tested architectures.
+
+\subsection{Pipeline-Parallel Partition Optimization}\label{sec:partition}
+
+Given $K$ fused blocks, the partition optimizer identifies a split point $s$ dividing the network into two stages: blocks $\{\mathcal{B}_1, \ldots, \mathcal{B}_s\}$ execute on the GPU and blocks $\{\mathcal{B}_{s+1}, \ldots, \mathcal{B}_K\}$ on the FPGA. For a single inference, execution is sequential with latency $L(s) = T_{\text{GPU}}^{\text{stage}}(s) + T_{\text{xfer}}(s) + T_{\text{FPGA}}^{\text{stage}}(s)$. For streaming workloads, the framework exploits pipeline parallelism: while the FPGA processes frame $n$'s second stage, the GPU processes frame $n+1$'s first stage. The sustained throughput is limited by the slower stage:
+\begin{equation}\label{eq:throughput}
+    \Theta(s) = \frac{1}{\max\left(T_{\text{GPU}}^{\text{stage}}(s),\ T_{\text{FPGA}}^{\text{stage}}(s)\right)}
+\end{equation}
+where
+\begin{equation}
+    T_{\text{GPU}}^{\text{stage}}(s) = \sum_{j=1}^{s} T_{\text{GPU}}(\mathcal{B}_j) + T_{\text{prep}}(s),\quad
+    T_{\text{FPGA}}^{\text{stage}}(s) = \sum_{j=s+1}^{K} T_{\text{FPGA}}^{q}(\mathcal{B}_j) + T_{\text{xfer}}^{q}(s).
+\end{equation}
+Here $T_{\text{prep}}(s)$ is the GPU-side overhead for preparing fused operators for the FPGA (folding BN parameters, applying quantization, packaging the dispatch), modeled as a base cost plus a term proportional to the offloaded parameter count. Pipeline efficiency quantifies stage balance:
+\begin{equation}\label{eq:efficiency}
+    E(s) = \frac{\min\left(T_{\text{GPU}}^{\text{stage}},\ T_{\text{FPGA}}^{\text{stage}}\right)}{\max\left(T_{\text{GPU}}^{\text{stage}},\ T_{\text{FPGA}}^{\text{stage}}\right)}
+\end{equation}
+where $E = 1$ indicates perfect balance. The optimizer searches all $K-1$ candidates and selects $s^* = \arg\max_s \Theta(s)$. Multi-split partitioning, where the network alternates devices multiple times, was also evaluated:
+\begin{equation}
+    \Theta_{\text{multi}} = \frac{1}{\max\left(\sum T_{\text{GPU segments}},\ \sum T_{\text{FPGA segments}} + \sum T_{\text{xfer}}\right)}
+\end{equation}
+Equations~\eqref{eq:throughput} assume perfect overlap and infinite buffering; Section~\ref{sec:e10} relaxes both with a discrete-event simulation.
 
 \subsection{Functional Emulation}\label{sec:emulation}
 
-To validate the analytical model, a functional emulator models device execution behavior rather than peak throughput. The FPGA is a sequential streaming processor (220 DSP slices); the GPU a parallel batch processor (128 cores, 6.1$\times$ FPGA bandwidth). Both produce costs in a common abstract unit system, enabling direct GPU-vs-FPGA comparison. Inter-device transfer is emulated by real tensor copies through host memory, scaled to target bandwidth. Fused blocks incur external-memory cost only for the first input, last output, and parameters, capturing the fusion benefit in the memory-bound regime.
+To validate the analytical model, a functional emulation models the execution behavior of each device rather than relying solely on peak-throughput calculations.
+
+\subsubsection{FPGA Emulator.} The FPGA is modeled as a sequential streaming processor with 220 DSP slices (matching the Zynq 7020). Each layer's cost is:
+\begin{equation}
+    C_{\text{FPGA}}(L_i) = \max\left(\frac{F_i}{220 \cdot \eta_{\text{FPGA}}(\tau_i)},\ \frac{B_i}{\beta_{\text{FPGA}} \cdot \eta_{\text{FPGA}}(\tau_i)}\right)
+\end{equation}
+The streaming efficiency scales both compute parallelism and effective memory bandwidth. For fused blocks, memory cost is computed only for the first input, last output, and parameters---intermediate activations reside in on-chip BRAM.
+
+\subsubsection{GPU Emulator.} The GPU is modeled as a parallel batch processor with 128 CUDA cores and 6.1$\times$ the FPGA's memory bandwidth:
+\begin{equation}
+    C_{\text{GPU}}(L_i) = \max\left(\frac{F_i}{128 \cdot \eta_{\text{GPU}}(\tau_i)},\ \frac{B_i}{6.1 \cdot \beta_{\text{FPGA}} \cdot \eta_{\text{GPU}}(\tau_i)}\right)
+\end{equation}
+Both emulators produce costs in the same abstract unit system, enabling direct comparison without absolute time calibration. The unit-space ratio between devices reveals the true performance gap under memory-bound conditions.
+
+\subsubsection{Communication Emulator.} Inter-device transfer is emulated by performing actual tensor copies through CPU memory (simulating the host RAM hop), measuring real copy times, and scaling to target hardware bandwidth. Transfer cost at a split point depends on the activation tensor size at that boundary.
 
 \subsection{Calibration-Based Latency Predictor}\label{sec:predictor}
 
-A latency predictor estimates per-block execution time from an 11--14-dimensional feature vector (MACs, parameters, tensor sizes, fusion flag, op-type indicators, kernel size, channels, spatial size, arithmetic intensity). A Random Forest regressor is trained on calibration data and evaluated by scheduling regret $R = 1 - \Theta(\hat{s})/\Theta(s^\ast)$, where $\hat s$ is the predicted split and $s^\ast$ the oracle. Section~\ref{sec:b5} revisits this predictor under a grounded, cross-validated protocol.
+To enable runtime scheduling without exhaustive profiling, a latency predictor estimates execution time for arbitrary fused blocks. Each block is represented by a 14-dimensional feature vector:
+\begin{equation}
+    \mathbf{x}_j = [F_j,\ P_j,\ |I_j|,\ |O_j|,\ n_j,\ f_j,\ \tau_1, \ldots, \tau_4,\ k_j,\ C_j,\ S_j,\ A_j]^T
+\end{equation}
+where $F_j$ is total MACs, $P_j$ parameters, $|I_j|,|O_j|$ input/output bytes, $n_j$ the fused-layer count, $f_j$ a fusion flag, $\tau_1{\ldots}\tau_4$ presence indicators for standard/depthwise/pointwise convolution and FC, $k_j$ the max kernel size, $C_j$ output channels, $S_j$ output spatial size, and $A_j$ arithmetic intensity. A Random Forest regressor (100 estimators, max depth 10) is trained on calibration data:
+\begin{enumerate}
+    \item Executing a diverse set of fused blocks from multiple architectures on the target hardware.
+    \item Recording execution times (5 measurements per block, Gaussian noise $\sigma=3\%$).
+    \item Fitting separate GPU and FPGA predictors on the (feature, time) pairs.
+\end{enumerate}
+The predictor is evaluated by \textit{scheduling regret}:
+\begin{equation}\label{eq:regret}
+    R = 1 - \frac{\Theta(\hat{s})}{\Theta(s^*)}
+\end{equation}
+where $\hat{s}$ is the predicted split and $s^*$ the oracle. Under this in-model protocol, expanding training from 2 architectures (71 samples) to 6 (735 samples) reduced average regret from 6.77\% to 0.20\%. Section~\ref{sec:b5} re-evaluates the predictor under a grounded, cross-validated protocol that does not train and test on the same generating formula.
+
+\subsection{Energy Efficiency Model}\label{sec:power}
+
+Total system power under heterogeneous execution is modeled with a proportional FPGA power model where FPGA power scales with the fraction of work assigned to it:
+\begin{equation}\label{eq:power}
+    P_{\text{total}} = P_{\text{GPU}} + P_{\text{idle}} + (P_{\text{FPGA}} - P_{\text{idle}}) \cdot \frac{K_{\text{FPGA}}}{K}
+\end{equation}
+where $P_{\text{GPU}} = 15$~W, $P_{\text{idle}} = 0.5$~W is FPGA static power, $P_{\text{FPGA}} = 5$~W is full active power, and $K_{\text{FPGA}}/K$ is the fraction of fused blocks on the FPGA. Energy efficiency is throughput per watt, $\Theta / P_{\text{total}}$. This proportional model is more realistic than a fixed-power model because the FPGA does not draw full active power when processing only a small tail of the network.
+
+\subsection{Calibration Against Published Benchmarks}\label{sec:calibration_method}
+
+To ground the emulation results in real hardware performance, the unit-space costs are calibrated against published inference benchmarks. For each device, a calibration factor $\lambda_d$ (in ms per unit) is computed:
+\begin{equation}\label{eq:calibration}
+    \lambda_d = \frac{T_{\text{published}}}{C_d^{\text{total}}}
+\end{equation}
+where $T_{\text{published}}$ is the published inference time and $C_d^{\text{total}}$ is the total emulated cost in units for the same architecture on device $d$. GPU calibration uses a single averaged factor across architectures (less than 9\% variation), while FPGA calibration requires per-architecture factors due to the workload-specific nature of FPGA implementations (3.2$\times$ variation observed).
 
 \section{Analytical and Emulation Results (Trials 1--2)}\label{sec:results}
 
-Both trials target a Jetson Nano class GPU (472 GFLOPS, 25.6~GB/s, 15W) and a Zynq~7020 class FPGA (6.5 GFLOPS, 4.2~GB/s, 5W) over PCIe Gen3 x4. Six architectures were tested (Table~\ref{tab:architectures}).
+The framework was evaluated using an analytical simulation (Trial~1) and a functional emulation (Trial~2). Both target a Jetson Nano class GPU (472 GFLOPS, 25.6~GB/s, 15W) and a Zynq 7020 class FPGA (6.5 GFLOPS, 4.2~GB/s, 5W), connected via PCIe Gen3 x4. Six architectures were tested (Table~\ref{tab:architectures}).
 
 \begin{table}
 \caption{Target CNN architectures.}\label{tab:architectures}
@@ -134,7 +264,7 @@ WideMobileNet & 69 & 27 & 0.33 & Depthwise sep. \\
 
 \subsection{Trial 1: Analytical Simulation}\label{sec:trial1}
 
-Operator fusion reduced execution time by $\sim$20\% on both devices; with INT8, FPGA time decreased by 67\%. The analytical model yields up to $+11.8\%$ heterogeneous throughput gain for MobileNetV2 (Table~\ref{tab:throughput_t1}, Fig.~\ref{fig:t1_summary}), identifying depthwise-separable networks as the primary beneficiaries. Multi-split partitioning provided no improvement over single-split.
+Operator fusion reduced execution time by approximately 20\% on both devices. Combined with INT8, FPGA time decreased by 67\%. Table~\ref{tab:throughput_t1} presents throughput results.
 
 \begin{table}
 \caption{Trial 1: Analytical throughput (INT8, PCIe).}\label{tab:throughput_t1}
@@ -159,15 +289,42 @@ WideMobile & 327/s & 352/s & +7.7\% & 24 & 49\% \\
 \caption{Trial 1 summary: (a) throughput comparison, (b) heterogeneous gain per architecture, (c) pipeline efficiency, (d) MobileNetV2 stage balance, (e) predictor regret improvement, (f) gain vs FPGA scaling.}\label{fig:t1_summary}
 \end{figure}
 
+A calibration predictor trained on 735 samples achieved 0.20\% average in-model scheduling regret (Table~\ref{tab:predictor}). Expanding training from 2 to 6 architectures reduced regret from 6.77\% to 0.20\% (Fig.~\ref{fig:t1_predictor} in Appendix). Multi-split partitioning (2--3 splits) provided no improvement over single-split for any architecture (Fig.~\ref{fig:t1_multisplit} in Appendix).
+
+\begin{table}
+\caption{Calibration predictor accuracy (in-model protocol; cf. Section~\ref{sec:b5}).}\label{tab:predictor}
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Architecture} & \textbf{Oracle} & \textbf{Predicted} & \textbf{Regret} \\
+\midrule
+ResNet-18 & 17 & 17 & 0.00\% \\
+MobileNetV2 & 48 & 48 & 0.00\% \\
+VGG-11 & 14 & 14 & 0.00\% \\
+EfficientNet-Lite & 21 & 21 & 0.00\% \\
+SmallCustomNet & 6 & 7 & 1.21\% \\
+WideMobileNet & 24 & 24 & 0.00\% \\
+\midrule
+\textbf{Average} & & & \textbf{0.20\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{Trial 2: Functional Emulation}\label{sec:trial2}
 
-All layers are memory-bound on the FPGA (compute/memory ratio 0.10 ResNet, 0.01 MobileNet). The emulated FPGA/GPU ratio after fusion+INT8 is 1.00$\times$ (ResNet) and 1.49$\times$ (MobileNet), versus 36.9$\times$/9.4$\times$ analytically (Fig.~\ref{fig:t2_perlayer}). The optimizer finds $+75\%$ (ResNet, split 13, 96.6\% efficiency) and $+10.1\%$ (MobileNetV2, split 48, 96.8\%); a 100-inference streaming simulation confirms $+73.3\%$/$+9.1\%$ sustained (Fig.~\ref{fig:t2_partition}). Table~\ref{tab:threelevels} and Fig.~\ref{fig:t2_comparison} contrast the two levels.
+The FPGA emulator models a sequential streaming pipeline with 220 DSP slices; the GPU emulator models parallel batch processing across 128 CUDA cores.
+
+\subsubsection{Memory-Bound Reality.} All layers on both architectures are memory-bound on the FPGA (compute/memory ratio: 0.10 ResNet, 0.01 MobileNet). The emulated FPGA/GPU ratio is 2.27$\times$ (ResNet) and 1.61$\times$ (MobileNet); after fusion+INT8, 1.00$\times$ and 1.49$\times$ (Fig.~\ref{fig:t2_perlayer}).
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\textwidth]{gpu_vs_fpga_per_layer.png}
-\caption{Emulated per-layer cost: GPU vs FPGA (log scale), ResNet-18 (top), MobileNetV2 (bottom).}\label{fig:t2_perlayer}
+\caption{Emulated per-layer cost: GPU vs FPGA on log scale for ResNet-18 (top) and MobileNetV2 (bottom).}\label{fig:t2_perlayer}
 \end{figure}
+
+\subsubsection{Fusion Savings.} Emulated fusion saves 47\% (GPU) and 77\% with INT8 (FPGA) for ResNet-18, and 64\% (GPU) and 66\% (FPGA) for MobileNetV2 (Fig.~\ref{fig:t2_fusion} in Appendix). These far exceed the analytical model's 20\% because eliminating intermediate tensor I/O has outsized impact in the memory-bound regime.
+
+\subsubsection{Pipeline Results.} The optimizer finds +75\% gain for ResNet-18 (split at block 13, 96.6\% efficiency) and +10.1\% for MobileNetV2 (block 48, 96.8\%). Streaming simulation of 100 inferences confirms +73.3\% and +9.1\% sustained gain with both devices above 95\% utilization (Figs.~\ref{fig:t2_streaming} and~\ref{fig:t2_pipeline} in Appendix).
 
 \begin{figure}[t]
 \centering
@@ -175,8 +332,12 @@ All layers are memory-bound on the FPGA (compute/memory ratio 0.10 ResNet, 0.01 
 \caption{Emulated partition analysis: throughput, stage balance, and efficiency across split points.}\label{fig:t2_partition}
 \end{figure}
 
+\subsection{Analytical vs Emulated Comparison}\label{sec:comparison}
+
+Table~\ref{tab:threelevels} and Fig.~\ref{fig:t2_comparison} compare key metrics between the two modeling levels.
+
 \begin{table}
-\caption{Comparison across modeling levels (Trials 1--2).}\label{tab:threelevels}
+\caption{Comparison across the analytical and emulated modeling levels.}\label{tab:threelevels}
 \centering
 \begin{tabular}{lcccc}
 \toprule
@@ -186,6 +347,7 @@ All layers are memory-bound on the FPGA (compute/memory ratio 0.10 ResNet, 0.01 
 FPGA/GPU ratio & 36.9$\times$ & 1.00$\times$ & 9.4$\times$ & 1.49$\times$ \\
 Throughput gain & +0.8\% & +73.3\% & +11.8\% & +9.1\% \\
 Pipeline eff. & 5\% & 96.6\% & 75\% & 96.8\% \\
+Fusion savings & 20\% & 47\% & 20\% & 64\% \\
 Optimal split & 17 & 13 & 48 & 48 \\
 \bottomrule
 \end{tabular}
@@ -197,23 +359,50 @@ Optimal split & 17 & 13 & 48 & 48 \\
 \caption{Analytical vs emulated: (a) FPGA/GPU ratio, (b) throughput gain, (c) pipeline efficiency, (d) fusion savings.}\label{fig:t2_comparison}
 \end{figure}
 
+\subsection{Calibrated Results and Break-Even}\label{sec:calibrated}
+
+Emulated costs were calibrated against published benchmarks (ResNet-18: 26ms Jetson Nano, 202ms Zynq 7020; MobileNetV2: 10ms, 43ms) using Eq.~\eqref{eq:calibration}. Local RTX 4070 measurements provided cross-validation (<9\% GPU error). FPGA factors differed 3.2$\times$ between architectures.
+
+Break-even requires 1.5$\times$ for ResNet-18 (6.7 GMAC/s) and 3.0$\times$ for MobileNetV2 (6.3 GMAC/s). UltraScale+ at 5--8$\times$ yields substantial gains (Table~\ref{tab:projection}, Fig.~\ref{fig:t2_sensitivity}).
+
+\begin{table}
+\caption{Projected gains on UltraScale+ (emulated model).}\label{tab:projection}
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Arch.} & \textbf{5$\times$ Gain} & \textbf{5$\times$ Eff.} & \textbf{8$\times$ Gain} & \textbf{8$\times$ Eff.} \\
+\midrule
+ResNet-18 & +35.6\% & 90.5\% & +65.3\% & 91.2\% \\
+MobileNetV2 & +66.5\% & 99.4\% & +139.9\% & 97.7\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{sensitivity_fpga_speed.png}
+\caption{FPGA speed sensitivity: throughput gain vs speed multiplier and required GMAC/s for break-even.}\label{fig:t2_sensitivity}
+\end{figure}
+
+Additional calibrated projections and the complete Trial~2 summary are provided in Figs.~\ref{fig:t2_calibrated} and~\ref{fig:t2_final} in the Appendix.
+
 \section{Trial 3: Hardware-Grounded Evaluation}\label{sec:grounded}
 
-Trials~1--2 rest on the hand-set efficiency factors of Table~\ref{tab:efficiency}. Trial~3 replaces them with values obtained directly from synthesis and measurement, then tests whether the heterogeneous benefit survives, calibrates the two grounded models to a common time base, and quantifies the pipeline realism, uncertainty, and accuracy cost that determine practical attainability.
+Trials~1--2 rest on the hand-set efficiency factors of Table~\ref{tab:efficiency} and on an extrapolated break-even projection. Trial~3 replaces the hand-set factors with values obtained directly from synthesis and measurement, then tests whether the heterogeneous benefit survives, calibrates the two grounded models to a common time base, and quantifies the pipeline realism, uncertainty, and accuracy cost that determine practical attainability.
 
 \subsection{FPGA Cost Grounding via HLS Synthesis}\label{sec:hls}
 
-We implemented INT8 streaming kernels for the seven operator types (standard/depthwise/pointwise convolution, batch normalization, ReLU, pooling, fully connected) in C++ and synthesized them with AMD Vitis HLS~2026.1 targeting the Zynq-7020 part (\texttt{xc7z020-clg400-1}) at 100~MHz. C-synthesis runs entirely on CPU and requires no board. For each operator we take a device-\emph{fitting} design point and define a compute efficiency as achieved MACs-per-cycle normalized by the 220-DSP peak, i.e. on the same scale as the hand-set $\eta_{\text{FPGA}}$; a memory bandwidth (bytes/cycle) is extracted from the memory-bound kernels (ReLU/BN/pool). The FPGA cost is then the roofline $\max(\text{compute}, \text{memory})$.
+We implemented INT8 streaming kernels for the seven operator types (standard/depthwise/pointwise convolution, batch normalization, ReLU, pooling, fully connected) in C++ and synthesized them with AMD Vitis HLS~2026.1 targeting the Zynq-7020 part (\texttt{xc7z020-clg400-1}) at 100~MHz. C-synthesis runs entirely on CPU and requires no board. For each operator we take a device-\emph{fitting} design point and define a compute efficiency as achieved MACs-per-cycle normalized by the 220-DSP peak (the same scale as the hand-set $\eta_{\text{FPGA}}$); a memory bandwidth in bytes/cycle is extracted from the memory-bound kernels (ReLU/BN/pool). The FPGA cost is then the roofline $\max(\text{compute}, \text{memory})$.
 
-Two findings emerge. First, the memory-bound operators (depthwise convolution, BN, ReLU, pool) do not benefit from added parallelism: unrolling them merely consumes DSPs without raising throughput, so their efficient realization is a narrow streaming datapath. Second, standard convolution exhibits a sharp \emph{DSP cliff}: it fits the 7020 only at unroll factor~1 (6 DSPs, $\sim$39M cycles), while unroll~$\geq 2$ jumps to 322 DSPs (146\% of the device) and no longer fits. Consequently the synthesized convolution efficiency is far below the hand-set 0.45, which dominates the ResNet result below.
+Two findings emerge. First, the memory-bound operators (depthwise convolution, BN, ReLU, pool) do not benefit from added parallelism: unrolling them merely consumes DSPs without raising throughput, so their efficient realization is a narrow streaming datapath. Second, standard convolution exhibits a sharp \emph{DSP cliff}: it fits the 7020 only at unroll factor~1 (6 DSPs, $\sim$39M cycles), while unroll~$\geq 2$ jumps to 322 DSPs (146\% of the device) and no longer fits (Fig.~\ref{fig:grounded}, right). Consequently the synthesized convolution efficiency is far below the hand-set 0.45, which dominates the ResNet result below.
 
 \subsection{GPU Cost Grounding}\label{sec:gpu}
 
-The GPU per-op efficiency was measured directly on an NVIDIA RTX~4070 Laptop GPU, timing each operator type at batch~1 on the same representative shapes with CUDA events (warmup plus median over 200 runs), and normalizing achieved MAC throughput to the best operator (dense convolution). The measured pattern is far more skewed than the hand-set values: convolution reaches unit efficiency, while pointwise (0.12), depthwise (0.06), pooling (0.05), and the elementwise/FC operators ($\sim$0.007) are much lower, since at batch~1 the small and memory-bound operators are kernel-launch bound.
+The GPU per-op efficiency was measured directly on an NVIDIA RTX~4070 Laptop GPU, timing each operator type at batch~1 on the same representative shapes with CUDA events (warmup plus median over 200 runs) and normalizing achieved MAC throughput to the best operator (dense convolution). The measured pattern is far more skewed than the hand-set values: convolution reaches unit efficiency, while pointwise (0.12), depthwise (0.06), pooling (0.05), and the elementwise/FC operators ($\sim$0.007) are much lower, since at batch~1 the small and memory-bound operators are kernel-launch bound.
 
 \subsection{Grounded Partition Results}\label{sec:grounded_results}
 
-Substituting the synthesized FPGA efficiencies (GPU model held at the hand-set values, to isolate the FPGA grounding) and re-running the partition optimizer gives an architecture-dependent picture (Table~\ref{tab:grounded}, Fig.~\ref{fig:grounded}). For MobileNetV2 the grounded FPGA cost is comparable to the GPU cost (FPGA/GPU $\approx 1.0\times$), so the pipeline balances and throughput approximately doubles ($+102\%$). For ResNet-18 the grounded convolution is $\sim$14$\times$ costlier on the FPGA than the GPU, so only a small tail offloads ($+9\%$).
+Substituting the synthesized FPGA efficiencies (GPU model held at the hand-set values, to isolate the FPGA grounding) and re-running the optimizer gives an architecture-dependent picture (Table~\ref{tab:grounded}, Fig.~\ref{fig:grounded}). For MobileNetV2 the grounded FPGA cost is comparable to the GPU cost (FPGA/GPU $\approx 1.0\times$), so the pipeline balances and throughput approximately doubles ($+102\%$). For ResNet-18 the grounded convolution is $\sim$14$\times$ costlier on the FPGA than the GPU, so only a small tail offloads ($+9\%$).
 
 \begin{table}
 \caption{Throughput gain vs GPU-only and FPGA/GPU cost ratio across the three modeling levels. Trial~3 uses HLS-synthesized FPGA costs (GPU hand-set, to isolate the FPGA grounding).}\label{tab:grounded}
@@ -238,11 +427,11 @@ Grounded (Trial 3) & +9.3\% & 14.1$\times$ & +102.2\% & 1.0$\times$ \\
 
 \subsection{Cross-Device Calibration}\label{sec:b6}
 
-Because the grounded GPU and FPGA efficiencies are normalized to different peaks, comparing them in raw unit space is invalid: grounding both devices at once inflates the apparent MobileNetV2 gain to over $1400\%$. We therefore calibrate each device's units to milliseconds using published anchors (ResNet-18: 26~ms Jetson Nano, 202~ms Zynq~7020; MobileNetV2: 43~ms Zynq~7020), with a single GPU factor and per-architecture FPGA factors. Calibration collapses the inflated figures to hardware-anchored gains of $+98\%$ (ResNet-18) and $+84\%$ (MobileNetV2). A leave-one-out check confirms that FPGA milliseconds-per-unit does \emph{not} transfer across architectures (large held-out error), whereas the GPU factor is stable---independently corroborating that FPGA cost is workload-specific and GPU cost is not.
+Because the grounded GPU and FPGA efficiencies are normalized to different peaks, comparing them in raw unit space is invalid: grounding both devices at once inflates the apparent MobileNetV2 gain to over $1400\%$. We therefore calibrate each device's units to milliseconds using published anchors (Eq.~\eqref{eq:calibration}), with a single GPU factor and per-architecture FPGA factors. Calibration collapses the inflated figures to hardware-anchored gains of $+98\%$ (ResNet-18) and $+84\%$ (MobileNetV2). A leave-one-out check confirms that FPGA milliseconds-per-unit does \emph{not} transfer across architectures (large held-out error), whereas the GPU factor is stable---independently corroborating that FPGA cost is workload-specific and GPU cost is not.
 
 \subsection{Latency Predictor Revisited}\label{sec:b5}
 
-We re-evaluate the scheduling predictor under a protocol that removes the circularity of the Trial~1 setup. Rather than training and testing on the analytical formula plus noise, we predict the \emph{synthesized} per-block FPGA cost from block features and evaluate by \emph{leave-one-architecture-out} cross-validation across four networks. Scheduling regret is 0\% for the conv-heavy ResNet-18 and VGG-11 but 21.6\% and 26.5\% for the depthwise-heavy MobileNetV2 and EfficientNet-Lite (with prediction error up to 121\% MAPE). This 0--26\% range is the honest generalization figure; the 0.20\% reported in Trial~1 reflects a predictor recovering the cost function it was trained on, not transfer to unseen workloads.
+We re-evaluate the scheduling predictor of Section~\ref{sec:predictor} under a protocol that removes the circularity of the in-model result. Rather than training and testing on the analytical formula plus noise, we predict the \emph{synthesized} per-block FPGA cost from block features and evaluate by \emph{leave-one-architecture-out} cross-validation across four networks. Scheduling regret is 0\% for the conv-heavy ResNet-18 and VGG-11 but 21.6\% and 26.5\% for the depthwise-heavy MobileNetV2 and EfficientNet-Lite (prediction error up to 121\% MAPE). This 0--26\% range is the honest generalization figure; the 0.20\% of Table~\ref{tab:predictor} reflects a predictor recovering the cost function it was trained on, not transfer to unseen workloads.
 
 \subsection{Uncertainty Analysis}\label{sec:d8}
 
@@ -276,15 +465,17 @@ Because the FPGA side runs INT8, an earlier split quantizes more layers. We fake
 
 \section{Discussion}\label{sec:discussion}
 
-Across all three modeling levels the heterogeneous configuration never underperforms GPU-only in expectation, and the Monte-Carlo analysis keeps the gain's sign stable. The central refinement contributed by the grounded evaluation is that the benefit is \emph{strongly architecture-dependent}. For depthwise-separable networks (MobileNetV2), the synthesized FPGA cost matches the GPU cost closely enough that the pipeline balances; the gain survives calibration ($+84\%$), realistic pipelining ($+81\%$), and constant uncertainty (CI strictly positive), at a modest $\sim$6\% INT8 fidelity cost. For conv-heavy networks (ResNet-18), the benefit is marginal and disappears under realistic streaming, bottlenecked by the FPGA convolution datapath and its DSP cliff---though such networks are, in compensation, quantization-safe.
+The multi-trial evaluation reveals that CNN inference on edge hardware is memory-bound, not compute-bound. This collapses the FPGA-to-GPU ratio from 10--37$\times$ (peak FLOPS) to 1.0--1.5$\times$ (memory-limited); analytical models relying on peak FLOPS systematically overestimate the GPU's advantage. Emulated fusion savings (47--64\% GPU, 45--77\% FPGA) far exceed the analytical 20\% for the same reason.
 
-The grounded evaluation also disciplines two earlier claims. First, the emulation's memory-bound finding is confirmed at the level of synthesized costs. Second, the 0.20\% predictor regret is an artifact of training and testing on the same analytical formula; under leave-one-architecture-out evaluation on synthesized targets, regret is 0--26\%, and notably higher for the depthwise-heavy networks whose block costs are hardest to predict. This is the more trustworthy figure for a runtime scheduler.
+Calibration against published benchmarks (Section~\ref{sec:calibrated}) shows the current Zynq 7020 is too slow for positive gains in absolute terms, but break-even requires only 1.5--3$\times$, and UltraScale+ at 5--8$\times$ projects +35\% to +140\%. The hardware-grounded evaluation (Section~\ref{sec:grounded}) refines this picture: with FPGA costs taken from synthesis rather than assumed, the benefit is \emph{strongly architecture-dependent}. For depthwise-separable networks the synthesized FPGA cost matches the GPU cost closely enough that the pipeline balances, and the gain survives calibration ($+84\%$), realistic pipelining ($+81\%$), and constant uncertainty (CI strictly positive), at a modest $\sim$6\% INT8 fidelity cost. For conv-heavy networks the benefit is marginal and disappears under realistic streaming, bottlenecked by the FPGA convolution datapath and its DSP cliff---though such networks are, in compensation, quantization-safe.
 
-Limitations remain. The synthesized kernels are representative rather than optimized; in particular, a proper output-stationary, DSP-tiled convolution with INT16 accumulators would remove the DSP cliff and could materially improve the conv-heavy result. The GPU is measured on a laptop RTX~4070 rather than the Jetson target, so only the relative per-op pattern transfers. The pipeline simulation, while relaxing the idealized ceiling, still omits contention on shared memory interfaces, and the accuracy analysis is a weight-only proxy. End-to-end validation on a physical Zynq platform remains future work.
+The grounded evaluation also disciplines the predictor claim. The 0.20\% regret of Table~\ref{tab:predictor} is an artifact of training and testing on the same analytical formula; under leave-one-architecture-out evaluation on synthesized targets (Section~\ref{sec:b5}), regret is 0--26\%, and notably higher for the depthwise-heavy networks whose block costs are hardest to predict. This is the more trustworthy figure for a runtime scheduler. Consistently, FPGA calibration factors differ 3.2$\times$ between architectures (workload-specific implementations) while GPU varies less than 9\%---a difference the leave-one-out calibration check independently confirms.
+
+Limitations remain. The synthesized kernels are representative rather than optimized; a proper output-stationary, DSP-tiled convolution with INT16 accumulators would remove the DSP cliff and could materially improve the conv-heavy result. The GPU is measured on a laptop RTX~4070 rather than the Jetson target, so only the relative per-op pattern transfers. The pipeline simulation, while relaxing the idealized ceiling, still omits contention on shared memory interfaces, and the accuracy analysis is a weight-only proxy. End-to-end validation on a physical Zynq platform remains future work, alongside real per-layer timing and extension to transformers.
 
 \section{Conclusion}\label{sec:conclusion}
 
-This paper presented an adaptive framework for heterogeneous GPU-FPGA CNN inference, evaluated through analytical simulation, functional emulation, and a hardware-grounded phase in which the FPGA cost model is derived from Vitis HLS synthesis for the Zynq~7020 and the GPU cost model from direct RTX~4070 measurement. Grounding the model in synthesis, calibrating the two devices to a common time base, tempering the pipeline with a discrete-event simulation, and bounding the result with Monte-Carlo shows that the heterogeneous benefit is real and robust for depthwise-separable networks ($+81\%$ sustained after realistic tempering, sign-stable under uncertainty) but marginal for conv-heavy networks until the FPGA convolution datapath improves. The same grounding corrects an over-optimistic predictor result to a realistic 0--26\% scheduling regret. The framework adapts automatically from conservative tail splits to aggressive partitioning as the balance between the two devices shifts.
+This paper presented an adaptive framework for heterogeneous GPU-FPGA CNN inference, evaluated through analytical simulation, functional emulation, and a hardware-grounded phase in which the FPGA cost model is derived from Vitis HLS synthesis for the Zynq~7020 and the GPU cost model from direct RTX~4070 measurement. The analytical model shows up to 11.8\% gain for depthwise architectures; the emulation reveals memory-bound execution, collapsing the FPGA/GPU ratio from 36.9$\times$ to 1.0$\times$; and calibration places break-even at 1.5--3$\times$ Zynq 7020 with +35\% to +140\% projected on UltraScale+. Grounding the model in synthesis, calibrating both devices to a common time base, tempering the pipeline with a discrete-event simulation, and bounding the result with Monte-Carlo shows the heterogeneous benefit is real and robust for depthwise-separable networks ($+81\%$ sustained after realistic tempering, sign-stable under uncertainty) but marginal for conv-heavy networks until the FPGA convolution datapath improves. The same grounding corrects the predictor result to a realistic 0--26\% scheduling regret. The framework adapts automatically from conservative tail splits to aggressive partitioning as the balance between the two devices shifts.
 
 \appendix
 
@@ -323,7 +514,7 @@ This paper presented an adaptive framework for heterogeneous GPU-FPGA CNN infere
 \begin{figure}[!htpb]
 \centering
 \includegraphics[width=0.85\textwidth, height=0.20\textheight, keepaspectratio]{pipeline_timing_diagram.png}
-\caption{Emulated pipeline timing showing overlapping GPU and FPGA execution for the first 5 inferences.}\label{fig:t2_pipeline}
+\caption{Emulated pipeline timing showing overlapping GPU and FPGA execution for the first 5 inferences. Each color represents one input frame.}\label{fig:t2_pipeline}
 \end{figure}
 
 \clearpage
@@ -332,13 +523,13 @@ This paper presented an adaptive framework for heterogeneous GPU-FPGA CNN infere
 \begin{figure}[!htpb]
 \centering
 \includegraphics[width=\textwidth, height=0.35\textheight, keepaspectratio]{calibrated_results_corrected.png}
-\caption{Trial 2 calibrated results: (a,b) projected throughput on Jetson Nano + Zynq 7020, (c) throughput gain across analytical, emulated, and calibrated levels.}\label{fig:t2_calibrated}
+\caption{Trial 2 calibrated results: (a,b) projected throughput on Jetson Nano + Zynq 7020 target hardware, (c) throughput gain comparison across analytical, emulated, and calibrated modeling levels.}\label{fig:t2_calibrated}
 \end{figure}
 
 \begin{figure}[!htpb]
 \centering
 \includegraphics[width=\textwidth, height=0.35\textheight, keepaspectratio]{trial2_final_summary.png}
-\caption{Trial 2 complete summary across per-layer costs, gain comparison, FPGA-speed sensitivity, pipeline timing, and UltraScale+ projection.}\label{fig:t2_final}
+\caption{Trial 2 complete summary: (a) per-layer GPU vs FPGA costs, (b) four-level throughput gain comparison, (c) gain vs FPGA speed, (d) pipeline timing, (e) analytical vs emulated metrics, (f) UltraScale+ projected throughput.}\label{fig:t2_final}
 \end{figure}
 
 \end{document}
