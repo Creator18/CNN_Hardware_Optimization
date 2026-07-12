@@ -13,7 +13,7 @@ INT8 compression, and calibration-based scheduling.
 |-------|----------|----------------|--------------|
 | 1 — Analytical | [`trial1.ipynb`](trial1.ipynb) | [`ResultImages_testingPhase/`](ResultImages_testingPhase) | Roofline/formula cost models across 6 architectures; partition optimizer; latency predictor. |
 | 2 — Emulation | [`trial2.ipynb`](trial2.ipynb) | [`ResultImages_emulationPhase/`](ResultImages_emulationPhase) | Functional emulation with real tensor ops; reveals memory-bound behavior; calibration to published benchmarks. |
-| 3 — Grounded *(in progress)* | `trial3.ipynb` *(planned)* | `ResultImages_groundedPhase/` *(planned)* | Replaces hand-set assumptions with **HLS-synthesized** FPGA costs and a **predictive** (leave-one-out) calibration. |
+| 3 — Grounded | [`trial3.ipynb`](trial3.ipynb) | [`ResultImages_groundedPhase/`](ResultImages_groundedPhase) | Replaces hand-set FPGA costs with **HLS-synthesized** ones (controlled ablation over trial2) and compares all three phases; pairs with the **predictive** (leave-one-out) calibration in `calibration/`. |
 
 > Note the legacy naming: `trial1` pairs with `ResultImages_testingPhase`,
 > `trial2` with `ResultImages_emulationPhase`. Phase 3 follows the same
