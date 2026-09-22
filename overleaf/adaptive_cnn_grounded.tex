@@ -52,7 +52,17 @@ The contributions of this paper are:
     \item A \emph{hardware-grounded} evaluation that derives the FPGA cost model from Vitis HLS synthesis (Zynq~7020) and the GPU cost model from RTX~4070 measurements, adds cross-device calibration, a discrete-event pipeline simulation, a Monte-Carlo uncertainty analysis, and an INT8 fidelity study. Using an output-stationary DSP-tiled convolution kernel that is C-simulation-verified and place-and-routed on the target part (timing met at 100~MHz), it shows both network classes have a favourable relative structure ($+81\%$ and $+132\%$ after pipeline tempering, in unit space) and identifies the convolution datapath (not the device) as the bottleneck---while calibration to absolute time shows only depthwise-separable networks are net-positive on the current 7020 ($+52\%$) with conv-heavy networks ($-79\%$) needing an UltraScale+-class FPGA. It also corrects the predictor result to a realistic 0--26\% regret under leave-one-architecture-out evaluation.
 \end{enumerate}
 
-The remainder of this paper is organized as follows. Section~\ref{sec:methodology} presents the proposed methodology. Section~\ref{sec:results} details the analytical and emulation results (Trials~1--2). Section~\ref{sec:grounded} presents the hardware-grounded evaluation (Trial~3). Section~\ref{sec:discussion} discusses findings and limitations. Section~\ref{sec:conclusion} concludes the paper.
+The remainder of this paper is organized as follows. Section~\ref{sec:related} reviews related work. Section~\ref{sec:methodology} presents the proposed methodology. Section~\ref{sec:results} details the analytical and emulation results (Trials~1--2). Section~\ref{sec:grounded} presents the hardware-grounded evaluation (Trial~3). Section~\ref{sec:discussion} discusses findings and limitations. Section~\ref{sec:conclusion} concludes the paper.
+
+\section{Related Work}\label{sec:related}
+
+\subsubsection{FPGA accelerators for CNN inference.} A large body of work optimizes single-FPGA CNN accelerators. Zhang et al.~\cite{zhang2015} applied roofline analysis to choose loop tiling and unrolling factors for convolutional layers on FPGA, and Qiu et al.~\cite{qiu2016} demonstrated a complete CNN on an embedded Xilinx Zynq platform---the same device class we target. High-level-synthesis frameworks such as FINN~\cite{finn2017} and hls4ml~\cite{hls4ml2018} generate dataflow accelerators for quantized networks directly from a trained model, and surveys catalog the broader design space~\cite{guo2019}. At the ASIC level, energy-efficient dataflow accelerators such as Eyeriss~\cite{eyeriss2017} established that inference energy is dominated by data movement rather than arithmetic---consistent with the memory-bound behavior our emulation and synthesis both expose. All of these target the FPGA in isolation; we instead co-schedule an FPGA \emph{alongside} a GPU and decide, per layer, which device should run it.
+
+\subsubsection{Quantization and operator fusion.} INT8 post-training quantization and integer-arithmetic-only inference~\cite{jacob2018,krishnamoorthi2018} are standard for edge deployment, trading a small accuracy cost for large throughput and memory savings. Exact batch-normalization folding~\cite{ioffe2015} and kernel fusion in deep-learning compilers such as TVM~\cite{tvm2018} remove intermediate-tensor memory traffic. We use both---exact BN folding and INT8 compression at the partition boundary---but, unlike cost-model studies that assume a fixed fusion or quantization speedup, we quantify their effect from synthesized costs and evaluate the INT8 fidelity trade-off directly.
+
+\subsubsection{Heterogeneous and split inference.} Collaborative and split-computing approaches partition a network across a device boundary. Neurosurgeon~\cite{neurosurgeon2017} splits a DNN between a mobile device and the cloud at the layer that minimizes predicted latency or energy, and subsequent work surveys split computing and early exiting broadly~\cite{matsubara2022}. These efforts typically split cloud$\leftrightarrow$edge or CPU$\leftrightarrow$accelerator. Our setting is different: a \emph{single} edge node containing both a GPU and an FPGA, partitioned by each layer's computational profile---compute-heavy, highly parallel layers to the GPU and memory-bound streaming layers to the FPGA---and executed as a two-stage pipeline for sustained streaming throughput.
+
+\subsubsection{Cost modeling and positioning.} The roofline model~\cite{roofline2009} underlies our per-layer compute-versus-memory bound. Prior heterogeneous-mapping and design-space studies largely rely on hand-set or peak-FLOPS-based efficiency assumptions. The distinguishing feature of this work is that we progressively remove those assumptions: we replace the hand-set FPGA efficiencies with values obtained from Vitis HLS synthesis~\cite{vitishls} (verified through place-and-route on the target part) and the GPU efficiencies with direct measurement, then calibrate the two devices to a common time base and quantify the residual uncertainty. To our knowledge this is the first complexity-aware GPU--FPGA partitioning study whose cost model is grounded in synthesis and measurement rather than assumed constants.
 
 \section{Methodology}\label{sec:methodology}
 
@@ -90,7 +100,7 @@ where $P_i$ is the parameter count and the factor of 4 converts element counts t
 
 The \textit{arithmetic intensity} of a layer, defined as $A_i = F_i / B_i$ (MACs per byte), determines whether execution is compute-bound or memory-bound. Standard convolutions typically have high arithmetic intensity (30--80 MACs/byte) while depthwise convolutions and batch normalization have low intensity (0.1--1.0 MACs/byte).
 
-The execution time on device $d \in \{\text{GPU}, \text{FPGA}\}$ follows the roofline model:
+The execution time on device $d \in \{\text{GPU}, \text{FPGA}\}$ follows the roofline model~\cite{roofline2009}:
 \begin{equation}\label{eq:roofline}
     T_d(L_i) = \max\left(\frac{F_i}{P_d \cdot \eta_d(\tau_i)},\ \frac{B_i}{\beta_d}\right)
 \end{equation}
@@ -132,7 +142,7 @@ The framework defines six fusible patterns, matched greedily in order of decreas
     \item PW\_CONV $\rightarrow$ BN
 \end{enumerate}
 
-The mathematical basis for convolution-batchnorm fusion is as follows. Given a convolution output $y = W \ast x + b$ followed by batch normalization $z = \gamma \cdot (y - \mu) / \sqrt{\sigma^2 + \epsilon} + \beta$, the fused operation is:
+The mathematical basis for convolution-batchnorm fusion~\cite{ioffe2015,tvm2018} is as follows. Given a convolution output $y = W \ast x + b$ followed by batch normalization $z = \gamma \cdot (y - \mu) / \sqrt{\sigma^2 + \epsilon} + \beta$, the fused operation is:
 \begin{equation}\label{eq:bn_fold}
     z = W_{\text{fold}} \ast x + b_{\text{fold}}
 \end{equation}
@@ -155,7 +165,7 @@ where the factor of 2 accounts for both the write by layer $i$ and the read by l
 
 \subsection{INT8 Quantization and Compression}\label{sec:quantization}
 
-Fused blocks dispatched to the FPGA are compressed via INT8 quantization, which provides two distinct benefits.
+Fused blocks dispatched to the FPGA are compressed via INT8 quantization~\cite{jacob2018,krishnamoorthi2018}, which provides two distinct benefits.
 
 First, FPGA throughput increases by a factor $\alpha_q$ because INT8 arithmetic units consume fewer logic resources than FP32 units, allowing more parallel multiply-accumulate operations to be instantiated in the same FPGA fabric, and can be clocked higher. For INT8, $\alpha_q = 2.5$:
 \begin{equation}\label{eq:quant_speedup}
@@ -243,7 +253,7 @@ where $T_{\text{published}}$ is the published inference time and $C_d^{\text{tot
 
 \section{Analytical and Emulation Results (Trials 1--2)}\label{sec:results}
 
-The framework was evaluated using an analytical simulation (Trial~1) and a functional emulation (Trial~2). Both target a Jetson Nano class GPU (472 GFLOPS, 25.6~GB/s, 15W) and a Zynq 7020 class FPGA (6.5 GFLOPS, 4.2~GB/s, 5W), connected via PCIe Gen3 x4. Six architectures were tested (Table~\ref{tab:architectures}).
+The framework was evaluated using an analytical simulation (Trial~1) and a functional emulation (Trial~2). Both target a Jetson Nano class GPU (472 GFLOPS, 25.6~GB/s, 15W) and a Zynq 7020 class FPGA (6.5 GFLOPS, 4.2~GB/s, 5W), connected via PCIe Gen3 x4. Six architectures were tested (Table~\ref{tab:architectures}), spanning standard-convolution networks (ResNet-18~\cite{he2016}, VGG-11) and depthwise-separable networks (MobileNetV2~\cite{sandler2018,howard2017}, EfficientNet-Lite, and two custom variants).
 
 \begin{table}
 \caption{Target CNN architectures.}\label{tab:architectures}
@@ -361,7 +371,7 @@ Optimal split & 17 & 13 & 48 & 48 \\
 
 \subsection{Calibrated Results and Break-Even}\label{sec:calibrated}
 
-Emulated costs were calibrated against published benchmarks (ResNet-18: 26ms Jetson Nano, 202ms Zynq 7020; MobileNetV2: 10ms, 43ms) using Eq.~\eqref{eq:calibration}. Local RTX 4070 measurements provided cross-validation (<9\% GPU error). FPGA factors differed 3.2$\times$ between architectures.
+Emulated costs were calibrated against published benchmarks---edge-GPU inference times from TensorRT~\cite{tensorrt} and edge-device studies such as DeepEdgeBench~\cite{deepedgebench2021}, and embedded-FPGA CNN latencies of the Zynq class~\cite{qiu2016} (ResNet-18: 26~ms Jetson Nano, 202~ms Zynq~7020; MobileNetV2: 10~ms, 43~ms)---using Eq.~\eqref{eq:calibration}. Local RTX 4070 measurements provided cross-validation (<9\% GPU error). FPGA factors differed 3.2$\times$ between architectures.
 
 Break-even requires 1.5$\times$ for ResNet-18 (6.7 GMAC/s) and 3.0$\times$ for MobileNetV2 (6.3 GMAC/s). UltraScale+ at 5--8$\times$ yields substantial gains (Table~\ref{tab:projection}, Fig.~\ref{fig:t2_sensitivity}).
 
@@ -392,7 +402,7 @@ Trials~1--2 rest on the hand-set efficiency factors of Table~\ref{tab:efficiency
 
 \subsection{FPGA Cost Grounding via HLS Synthesis}\label{sec:hls}
 
-We implemented INT8 streaming kernels for the seven operator types (standard/depthwise/pointwise convolution, batch normalization, ReLU, pooling, fully connected) in C++ and synthesized them with AMD Vitis HLS~2026.1 targeting the Zynq-7020 part (\texttt{xc7z020-clg400-1}) at 100~MHz. C-synthesis runs entirely on CPU and requires no board. For each operator we take a device-\emph{fitting} design point and define a compute efficiency as achieved MACs-per-cycle normalized by the 220-DSP peak (the same scale as the hand-set $\eta_{\text{FPGA}}$); a memory bandwidth in bytes/cycle is extracted from the memory-bound kernels (ReLU/BN/pool). The FPGA cost is then the roofline $\max(\text{compute}, \text{memory})$.
+We implemented INT8 streaming kernels for the seven operator types (standard/depthwise/pointwise convolution, batch normalization, ReLU, pooling, fully connected) in C++ and synthesized them with AMD Vitis HLS~2026.1~\cite{vitishls} targeting the Zynq-7020 part (\texttt{xc7z020-clg400-1}) at 100~MHz, in the spirit of HLS accelerator generators such as FINN~\cite{finn2017} and hls4ml~\cite{hls4ml2018} but used here to \emph{cost} operators rather than to build a full accelerator. C-synthesis runs entirely on CPU and requires no board. For each operator we take a device-\emph{fitting} design point and define a compute efficiency as achieved MACs-per-cycle normalized by the 220-DSP peak (the same scale as the hand-set $\eta_{\text{FPGA}}$); a memory bandwidth in bytes/cycle is extracted from the memory-bound kernels (ReLU/BN/pool). The FPGA cost is then the roofline $\max(\text{compute}, \text{memory})$.
 
 Two findings emerge. First, the memory-bound operators (depthwise convolution, BN, ReLU, pool) do not benefit from added parallelism: unrolling them merely consumes DSPs without raising throughput, so their efficient realization is a narrow streaming datapath. Second, the convolution datapath is decisive. An initial \emph{naive} convolution kernel exhibited a sharp DSP cliff---a single unroll knob forced HLS to fully unroll the entire reduction, so it fit the 7020 only at a near-serial 6-DSP point and exploded past 322 DSPs at any higher setting---making convolution appear far more expensive on the FPGA than it need be. We therefore designed an \emph{output-stationary, DSP-tiled} convolution (separate output- and input-channel tiles $T_M,T_N$, int8$\times$int8 MACs, a zero-padded on-chip buffer). Its resource use scales gracefully ($40\to72\to166$ DSPs as $T_M\!\cdot\!T_N$ grows), and the best point that fits the device ($T_M{=}16,T_N{=}8$: 72 DSPs) reaches $\sim$63 MACs/cycle---a convolution efficiency of $\approx0.29$, roughly $21\times$ the naive kernel and comparable to the GPU, with \emph{BRAM} (the on-chip cache), not DSP, now the binding constraint (Fig.~\ref{fig:grounded}, right).
 
@@ -533,5 +543,47 @@ This paper presented an adaptive framework for heterogeneous GPU-FPGA CNN infere
 \includegraphics[width=\textwidth, height=0.35\textheight, keepaspectratio]{trial2_final_summary.png}
 \caption{Trial 2 complete summary: (a) per-layer GPU vs FPGA costs, (b) four-level throughput gain comparison, (c) gain vs FPGA speed, (d) pipeline timing, (e) analytical vs emulated metrics, (f) UltraScale+ projected throughput.}\label{fig:t2_final}
 \end{figure}
+
+\begin{thebibliography}{99}
+
+\bibitem{he2016} He, K., Zhang, X., Ren, S., Sun, J.: Deep residual learning for image recognition. In: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR), pp. 770--778 (2016)
+
+\bibitem{sandler2018} Sandler, M., Howard, A., Zhu, M., Zhmoginov, A., Chen, L.C.: MobileNetV2: Inverted residuals and linear bottlenecks. In: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR), pp. 4510--4520 (2018)
+
+\bibitem{howard2017} Howard, A.G., Zhu, M., Chen, B., Kalenichenko, D., Wang, W., Weyand, T., Andreetto, M., Adam, H.: MobileNets: Efficient convolutional neural networks for mobile vision applications. arXiv:1704.04861 (2017)
+
+\bibitem{roofline2009} Williams, S., Waterman, A., Patterson, D.: Roofline: An insightful visual performance model for multicore architectures. Communications of the ACM 52(4), 65--76 (2009)
+
+\bibitem{ioffe2015} Ioffe, S., Szegedy, C.: Batch normalization: Accelerating deep network training by reducing internal covariate shift. In: Int. Conf. on Machine Learning (ICML), pp. 448--456 (2015)
+
+\bibitem{jacob2018} Jacob, B., Kligys, S., Chen, B., Zhu, M., Tang, M., Howard, A., Adam, H., Kalenichenko, D.: Quantization and training of neural networks for efficient integer-arithmetic-only inference. In: IEEE Conf. on Computer Vision and Pattern Recognition (CVPR), pp. 2704--2713 (2018)
+
+\bibitem{krishnamoorthi2018} Krishnamoorthi, R.: Quantizing deep convolutional networks for efficient inference: A whitepaper. arXiv:1806.08342 (2018)
+
+\bibitem{zhang2015} Zhang, C., Li, P., Sun, G., Guan, Y., Xiao, B., Cong, J.: Optimizing FPGA-based accelerator design for deep convolutional neural networks. In: ACM/SIGDA Int. Symp. on Field-Programmable Gate Arrays (FPGA), pp. 161--170 (2015)
+
+\bibitem{qiu2016} Qiu, J., Wang, J., Yao, S., Guo, K., Li, B., Zhou, E., Yu, J., Tang, T., Xu, N., Song, S., Wang, Y., Yang, H.: Going deeper with embedded FPGA platform for convolutional neural network. In: ACM/SIGDA Int. Symp. on Field-Programmable Gate Arrays (FPGA), pp. 26--35 (2016)
+
+\bibitem{finn2017} Umuroglu, Y., Fraser, N.J., Gambardella, G., Blott, M., Leong, P., Jahre, M., Vissers, K.: FINN: A framework for fast, scalable binarized neural network inference. In: ACM/SIGDA Int. Symp. on Field-Programmable Gate Arrays (FPGA), pp. 65--74 (2017)
+
+\bibitem{hls4ml2018} Duarte, J., et al.: Fast inference of deep neural networks in FPGAs for particle physics. Journal of Instrumentation 13(07), P07027 (2018)
+
+\bibitem{eyeriss2017} Chen, Y.H., Krishna, T., Emer, J.S., Sze, V.: Eyeriss: An energy-efficient reconfigurable accelerator for deep convolutional neural networks. IEEE Journal of Solid-State Circuits 52(1), 127--138 (2017)
+
+\bibitem{guo2019} Guo, K., Zeng, S., Yu, J., Wang, Y., Yang, H.: A survey of FPGA-based neural network inference accelerators. ACM Transactions on Reconfigurable Technology and Systems 12(1), 1--26 (2019)
+
+\bibitem{neurosurgeon2017} Kang, Y., Hauswald, J., Gao, C., Rovinski, A., Mudge, T., Mars, J., Tang, L.: Neurosurgeon: Collaborative intelligence between the cloud and mobile edge. In: ACM Int. Conf. on Architectural Support for Programming Languages and Operating Systems (ASPLOS), pp. 615--629 (2017)
+
+\bibitem{matsubara2022} Matsubara, Y., Levorato, M., Restuccia, F.: Split computing and early exiting for deep learning applications: Survey and research challenges. ACM Computing Surveys 55(5), 1--30 (2022)
+
+\bibitem{tvm2018} Chen, T., Moreau, T., Jiang, Z., Zheng, L., Yan, E., Cowan, M., Shen, H., Wang, L., Hu, Y., Ceze, L., Guestrin, C., Krishnamurthy, A.: TVM: An automated end-to-end optimizing compiler for deep learning. In: USENIX Symp. on Operating Systems Design and Implementation (OSDI), pp. 578--594 (2018)
+
+\bibitem{vitishls} AMD/Xilinx: Vitis High-Level Synthesis User Guide (UG1399). Advanced Micro Devices, Inc. (2023)
+
+\bibitem{deepedgebench2021} Baller, S.P., Jindal, A., Chadha, A., Chinnusamy, M.: DeepEdgeBench: Benchmarking deep neural networks on edge devices. In: IEEE Int. Conf. on Cloud Engineering (IC2E), pp. 20--30 (2021)
+
+\bibitem{tensorrt} NVIDIA Corporation: NVIDIA TensorRT: Programmable inference accelerator. \url{https://developer.nvidia.com/tensorrt} (accessed 2026)
+
+\end{thebibliography}
 
 \end{document}

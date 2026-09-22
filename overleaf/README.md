@@ -10,8 +10,10 @@ hardware-grounded evaluation (Trial 3).
    Overleaf's TeX Live distribution — no extra files needed.
 
 ## Contents
-- `adaptive_cnn_grounded.tex` — the paper. `\graphicspath{{./}}`, so all images
-  are found in this flat folder.
+- `adaptive_cnn_grounded.tex` — the paper, self-contained: includes a
+  **Related Work** section and an embedded `thebibliography` (19 references),
+  so it compiles in a single pdfLaTeX pass with **no `.bib` / BibTeX step**.
+  `\graphicspath{{./}}`, so all images are found in this flat folder.
 - 16 `.png` figures referenced by the document (Trials 1–3).
 
 ## What changed vs the original template
