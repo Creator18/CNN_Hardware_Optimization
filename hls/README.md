@@ -1,68 +1,77 @@
-# HLS FPGA cost grounding
+# HLS cost grounding for the FPGA side
 
-Goal: replace the **hand-set FPGA efficiency constants** in `trial2.ipynb`
-(`streaming_efficiency = {CONV: 0.45, DEPTHWISE_CONV: 0.85, ...}`) with numbers
-**derived from Vitis HLS synthesis** for the actual Zynq-7020 (`xc7z020`).
-No board required — C-synthesis runs on CPU.
+These kernels replace the hand-set FPGA efficiency constants of Trial 2 with
+numbers obtained from AMD Vitis HLS 2026.1 synthesis for the Zynq-7020 part
+(`xc7z020-clg400-1`, 100 MHz). C-synthesis runs on a CPU; no board is needed.
 
 ## Files
-| File | What it is |
-|------|-----------|
-| `kernels/common.h` | shared INT8 types + representative layer shapes |
-| `kernels/conv3x3.cpp` | standard 3x3 conv (compute-heavy) |
-| `kernels/depthwise3x3.cpp` | depthwise 3x3 (FPGA's claimed strength) |
-| `kernels/pointwise.cpp` | 1x1 conv |
-| `kernels/batchnorm.cpp` | elementwise BN (near-free streaming) |
-| `hls_<kernel>.cfg` | v++ config per kernel (part, top, clock) |
-| `run_synth.bat` | runs `v++ -c --mode hls` for all four kernels |
-| `parse_hls_report.py` | report XML → `reports/<kernel>.json` |
-| `fpga_constants_from_hls.py` | `reports/*.json` → FPGA efficiency constants |
-| `reports/` | **committed** extracted JSON (build dirs are gitignored) |
 
-## Toolchain note (2026.1)
-The classic `vitis_hls -f script.tcl` wrapper was removed; under `vitis-run` the
-Tcl `add_files` path handling is broken. The working flow is the unified
-compiler: **`v++ -c --mode hls --config <kernel>.cfg --work_dir work/<kernel>`**.
-`run_synth.bat` wraps this. You also need the free node-locked license
-(Vivado **Basic** tier + Vitis HLS, both No-Charge) at `XILINXD_LICENSE_FILE`.
+| Path | Contents |
+|------|----------|
+| `kernels/conv_tiled.cpp` | Output-stationary DSP-tiled 3x3 convolution (tiles `TM` x `TN`). The CONV cost source. |
+| `kernels/conv3x3.cpp` | Naive convolution kept as a baseline; shows the DSP cliff described in the paper. |
+| `kernels/{depthwise3x3,pointwise,batchnorm,relu,pool,fc}.cpp` | INT8 streaming kernels for the other operators. |
+| `tb/tb_conv.cpp` | C-simulation testbench: checks the tiled conv against a reference convolution. |
+| `hls_<name>.cfg` | One `v++` config per design point; output goes to `work/<name>/`. |
+| `run_synth.bat` | C-synthesizes all 13 design points that `parse_hls_report.py` reads. |
+| `run_impl.bat` | C-simulation plus Vivado place-and-route of the chosen conv (TM=16, TN=8). |
+| `parse_hls_report.py` | Synthesis XML to `reports/<op>.json`; picks each operator's best design point that fits the device. |
+| `fpga_constants_from_hls.py` | `reports/*.json` to `reports/_fpga_constants.json`, which `trial3.ipynb` reads. |
+| `reports/` | Committed results. Build directories (`work/`) are git-ignored. |
 
-## Workflow
-1. From this `hls/` directory in a cmd prompt:
-   ```
-   run_synth.bat
-   ```
-   (~1-3 min per kernel; writes `work/<kernel>/hls/syn/report/*_csynth.xml`.)
-2. Extract the numbers:  `python parse_hls_report.py`  → `reports/<kernel>.json`
-   (latency cycles + µs, initiation interval, DSP/BRAM/FF/LUT + utilization).
-3. Derive the constants: `python fpga_constants_from_hls.py` →
-   `reports/_fpga_constants.json`.
-4. Commit **only** `reports/*.json` (the `work/` build dirs are gitignored),
-   then import `_fpga_constants.json` into `trial2.ipynb` to replace the
-   hand-set `streaming_efficiency` values.
+## Reproduce
 
-## Results & honesty
-Synthesized on xc7z020 (numbers in `reports/`):
+Requirements: Vitis 2026.1 and the free node-locked license (Vivado Basic tier
+plus Vitis HLS) pointed to by `XILINXD_LICENSE_FILE`. Edit `VITIS_SETTINGS` at
+the top of the `.bat` files if your install path differs. From this folder:
 
-| op | MACs/cycle | DSP (of 220) | eff/DSP | note |
-|----|-----------|--------------|---------|------|
-| conv3x3 | 57.2 | 322 (146%, over-maps) | 0.178 | on-chip cached + zero-padded + IC_UNROLL=4; high throughput but exceeds the 7020 → must be tiled/time-multiplexed in practice (consistent with the paper: dense conv is the FPGA's hard case) |
-| depthwise3x3 | 1.00 | 9 | 0.111 | single-lane; streams cleanly |
-| pointwise | 1.00 | 16 | 0.062 | single-lane; streams cleanly |
-| batchnorm | 0.99 | 1 | 0.994 | near-free, as expected |
+```
+run_synth.bat
+python parse_hls_report.py
+python fpga_constants_from_hls.py
+run_impl.bat
+```
 
-The qualitative ordering matches the paper's thesis (BN/depthwise/pointwise
-stream efficiently; dense conv is expensive and doesn't fit).
+Toolchain notes for 2026.1: HLS C-synthesis is driven by `v++ -c --mode hls`
+(the old `vitis_hls -f` Tcl flow is gone), C-simulation and implementation by
+`vitis-run --mode hls --csim / --impl`, and `v++` must be invoked with `call`
+inside a `.bat`. Implementation runs in a short directory because Vitis exceeds
+the Windows 260-character path limit under a long project path.
 
-**Two caveats before using these as final cost constants:**
-1. **Unmatched parallelism.** conv3x3 is unrolled (IC_UNROLL=4) while the others
-   are single-lane, so raw MACs/cycle isn't apples-to-apples. `eff/DSP`
-   (throughput per DSP) is the fairer normalized metric, but for a clean
-   comparison give all four kernels comparable parallelism.
-2. **Sweep the design space.** Vary `IC_UNROLL` (in `kernels/conv3x3.cpp`) and
-   report a latency-vs-DSP curve rather than one point — this feeds the
-   Monte-Carlo uncertainty analysis (#6) and shows the fit/throughput tradeoff.
+## Results (from `reports/`)
 
-Report the design point(s) you actually use in the paper.
+Per-operator design point used by the cost model:
 
-Shapes to synthesize live in each `*_top()` and in the `.cfg` files; edit them to
-match specific layers from `build_resnet18` / `build_mobilenetv2` in the notebooks.
+| Operator | Design point | MACs/cycle | Efficiency (MACs/cycle / 220) | DSP | Fits xc7z020 |
+|----------|--------------|-----------:|------------------------------:|----:|:------------:|
+| CONV | conv_tiled 16x8 | 63.03 | 0.2865 | 72 | yes |
+| DEPTHWISE_CONV | dw_u1 | 2.93 | 0.0133 | 8 | no (BRAM 292/280) |
+| POINTWISE_CONV | pointwise | 7.58 | 0.0344 | 16 | yes |
+| BATCHNORM | batchnorm | 2.00 | 0.0091 | 64 | yes |
+| RELU | relu | 1.00 | 0.0045 | 0 | yes |
+| POOL | pool | 1.76 | 0.0080 | 0 | no (BRAM 514/280) |
+| FC | fc_u1 | 1.00 | 0.0045 | 1 | yes |
+
+Effective FPGA memory bandwidth from the memory-bound kernels: 4.996 bytes/cycle.
+
+Tiled conv sweep (`reports/conv_sweep.json`): DSP grows smoothly with `TM x TN`
+(no cliff), and on-chip BRAM becomes the binding resource.
+
+| TM x TN | Cycles | DSP | BRAM_18K | Fits |
+|---------|-------:|----:|---------:|:----:|
+| 8 x 8 | 3,051,634 | 40 | 196 | yes |
+| 16 x 8 | 1,834,182 | 72 | 260 | yes |
+| 16 x 12 | 1,495,506 | 166 | 388 | no |
+| 16 x 16 | 1,370,054 | 136 | 388 | no |
+
+Implementation of the 16 x 8 conv (`reports/conv_impl.json`): C-simulation
+passes on all 200,704 outputs; after place-and-route it uses 73 DSP, 11,011 LUT,
+7,995 FF and 258 of 280 BRAM_18K, and meets timing at 100 MHz (post-route
+critical path 9.866 ns).
+
+## Limits
+
+Each operator is one representative layer shape at one design point. Depthwise
+and pool cache the whole input on-chip and exceed BRAM as written; a line-buffer
+design would fit. Only the conv has been place-and-routed; the other operators
+are C-synthesis estimates.

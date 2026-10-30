@@ -1,0 +1,10 @@
+# Versions this repository was run with (Python 3.11.9, Windows 11).
+# torch/torchvision were the CUDA 12.4 builds. A CPU build runs trial1, trial3
+# and the hls/ and calibration/ scripts; gpu/profile_gpu.py and the local-GPU
+# timing cell of trial2 need a CUDA GPU.
+numpy==1.26.4
+matplotlib==3.8.2
+scikit-learn==1.8.0
+torch==2.6.0
+torchvision==0.21.0
+jupyter

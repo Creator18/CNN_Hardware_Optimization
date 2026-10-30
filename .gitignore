@@ -1,7 +1,6 @@
-# ============================================================
-# Vitis HLS / Vivado build artifacts — NEVER commit these
-# (they are gigabytes of regenerable binary/intermediate junk)
-# ============================================================
+# ------------------------------------------------------------
+# Vitis HLS / Vivado build artifacts (regenerable, often gigabytes)
+# ------------------------------------------------------------
 # v++ --work_dir output (synthesis build dirs)
 hls/work/
 # leftover from earlier classic-Tcl attempts
@@ -14,23 +13,62 @@ vitis_hls.log
 .hls.failed
 hls.app
 
-# Licenses — node-locked, machine-specific, keep out of the repo
+# Licenses: node-locked and machine-specific
 *.lic
 
-# Keep ONLY: kernel source, the .cfg files, the runner, and extracted report
-# JSON. The extracted reports live in hls/reports/ and ARE committed.
+# Extracted synthesis results ARE committed
 !hls/reports/
 !hls/reports/*.json
 
 # ------------------------------------------------------------
-# Python
+# Python and Jupyter
 # ------------------------------------------------------------
 __pycache__/
-*.pyc
+*.py[cod]
 .venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
 .ipynb_checkpoints/
 
 # ------------------------------------------------------------
-# Scratch
+# Secrets and local tool settings
 # ------------------------------------------------------------
+.env
+.env.*
+.claude/
+.vscode/
+.idea/
+
+# ------------------------------------------------------------
+# Data and model weights (none are needed; torchvision caches
+# pretrained weights in the user's home directory)
+# ------------------------------------------------------------
+data/
+*.pt
+*.pth
+*.onnx
+*.ckpt
+
+# ------------------------------------------------------------
+# LaTeX build output (compile the paper on Overleaf)
+# ------------------------------------------------------------
+overleaf/*.aux
+overleaf/*.log
+overleaf/*.out
+overleaf/*.bbl
+overleaf/*.blg
+overleaf/*.toc
+overleaf/*.fls
+overleaf/*.fdb_latexmk
+overleaf/*.synctex.gz
+overleaf/*.pdf
+
+# ------------------------------------------------------------
+# OS and scratch
+# ------------------------------------------------------------
+.DS_Store
+Thumbs.db
 _paper.txt
